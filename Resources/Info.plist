@@ -7,7 +7,7 @@
     <key>CFBundleDisplayName</key>
     <string>Kymara</string>
     <key>CFBundleIdentifier</key>
-    <string>io.github.kymara</string>
+    <string>nl.pa3jh.kymara</string>
     <key>CFBundleExecutable</key>
     <string>Kymara</string>
     <key>CFBundleIconFile</key>
