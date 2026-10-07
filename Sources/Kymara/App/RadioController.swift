@@ -108,6 +108,8 @@ final class RadioController {
     var fillSpectrum = true { didSet { scheduleSave() } }
     var showBookmarks = true { didSet { scheduleSave() } }
     var showRDSPanel = true { didSet { scheduleSave() } }
+    /// Spectrum share of the spectrum + waterfall height.
+    var spectrumFraction: Double = 320.0 / 740.0 { didSet { scheduleSave() } }
     var theme: AppTheme = .system { didSet { theme.apply(); scheduleSave() } }
     var displayTheme: DisplayTheme = .auto { didSet { scheduleSave() } }
     /// Visible span = sampleRate / zoom.
@@ -632,6 +634,7 @@ final class RadioController {
         meterCalibration = s.meterCalibration
         showBookmarks = s.showBookmarks
         showRDSPanel = s.showRDSPanel
+        spectrumFraction = min(max(s.spectrumFraction, 0.05), 0.95)
         displayTheme = s.displayTheme
         theme = s.theme ?? .system
         theme.apply()
@@ -687,6 +690,7 @@ final class RadioController {
         s.meterCalibration = meterCalibration
         s.showBookmarks = showBookmarks
         s.showRDSPanel = showRDSPanel
+        s.spectrumFraction = spectrumFraction
         s.displayTheme = displayTheme
         s.theme = theme
         return s

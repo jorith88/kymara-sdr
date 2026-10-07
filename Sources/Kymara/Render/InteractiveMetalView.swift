@@ -71,6 +71,10 @@ final class InteractiveMTKView: MTKView {
     override func mouseMoved(with event: NSEvent) {
         let p = convert(event.locationInWindow, from: nil)
         radio?.hover = (frequency(at: p.x), db(at: p.y))
+        // Tracking areas fire even when another view (the split handle) covers this one;
+        // leave the cursor to that view then.
+        if let content = window?.contentView,
+           content.hitTest(content.convert(event.locationInWindow, from: nil)) !== self { return }
         switch hitTest(x: p.x) {
         case .edgeLow, .edgeHigh: NSCursor.resizeLeftRight.set()
         case .passband: NSCursor.openHand.set()

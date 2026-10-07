@@ -122,7 +122,7 @@ struct ContentView: View {
                 Sidebar()
                     .frame(width: 290)
                 Rectangle().fill(Theme.border).frame(width: 1)
-                VSplitView {
+                SpectrumSplit(fraction: $radio.spectrumFraction) {
                     ZStack {
                         MetalDisplay(radio: radio, kind: .spectrum)
                         SpectrumOverlay()
@@ -140,9 +140,8 @@ struct ContentView: View {
                             .allowsHitTesting(false)
                         }
                     }
-                    .frame(minHeight: 140, idealHeight: 320)
+                } bottom: {
                     MetalDisplay(radio: radio, kind: .waterfall)
-                        .frame(minHeight: 100, idealHeight: 420)
                 }
                 if radio.showBookmarks {
                     Rectangle().fill(Theme.border).frame(width: 1)
