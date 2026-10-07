@@ -21,7 +21,7 @@ swift run -c release Kymara                    # run unbundled (uses a separate 
 rtl_sdr -f 99000000 -s 2400000 -g 40 -n 19200000 out.cu8   # record raw IQ from the attached dongle for testing
 ```
 
-`scripts/make-icon.swift` regenerates `Resources/AppIcon.icns`. There is no linter.
+`scripts/make-icon.swift` regenerates `Resources/AppIcon.icns`. There is no linter. Releases: `/release <version>` (`.claude/skills/release/SKILL.md`) tests, bumps the version, builds the DMG, tags and publishes a GitHub release.
 
 ## Architecture
 
