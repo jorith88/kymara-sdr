@@ -16,20 +16,21 @@ struct SpectrumOverlay: View {
             let scale: Color = radio.displayTheme.isLight(in: colorScheme) ? Color(red: 0.05, green: 0.1, blue: 0.2) : .white
 
             ZStack(alignment: .topLeading) {
-                // dB scale.
+                // dB scale, mirrored on both edges so the plot reads as framed when nothing sits to its right.
                 ForEach(Axis.dbTicks(bottom: bottom, top: top, height: h), id: \.self) { db in
-                    let y = h - (db - bottom) / (top - bottom) * h
-                    Text("\(Int(db))")
+                    let y = min(max(h - (db - bottom) / (top - bottom) * h, 7), h - 7)
+                    let label = Text("\(Int(db))")
                         .font(.system(size: 9.5, design: .monospaced))
-                        .foregroundStyle(scale.opacity(0.5))
-                        .position(x: 16, y: min(max(y, 7), h - 7))
+                        .foregroundStyle(scale.opacity(0.7))
+                    label.position(x: 16, y: y)
+                    label.position(x: w - 16, y: y)
                 }
                 // Frequency scale.
                 ForEach(fTicks.ticks, id: \.self) { f in
                     let x = (f - start) / span * w
                     Text(Axis.frequencyLabel(f, step: fTicks.step))
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(scale.opacity(0.6))
+                        .foregroundStyle(scale.opacity(0.8))
                         .fixedSize()
                         .position(x: min(max(x, 30), w - 30), y: h - 8)
                 }
@@ -65,7 +66,7 @@ struct SpectrumOverlay: View {
                         .font(.system(size: 9.5))
                         .foregroundStyle(scale.opacity(0.55))
                         .fixedSize()
-                        .position(x: w - 90, y: 28)
+                        .position(x: w - 110, y: 28)
                 }
             }
             .allowsHitTesting(false)
@@ -132,7 +133,7 @@ struct ContentView: View {
                                 let vfoOnRight = (radio.vfoFrequency - radio.viewStart) / radio.viewSpan > 0.5
                                 RDSOverlay(availableHeight: geo.size.height)
                                     .padding(.top, 38)
-                                    .padding(.horizontal, vfoOnRight ? 44 : 14)
+                                    .padding(.horizontal, 44)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity,
                                            alignment: vfoOnRight ? .topLeading : .topTrailing)
                                     .animation(.easeInOut(duration: 0.25), value: vfoOnRight)
