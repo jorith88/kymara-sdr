@@ -103,6 +103,7 @@ final class RadioController {
     var peakHold = false { didSet { scheduleSave() } }
     var fillSpectrum = true { didSet { scheduleSave() } }
     var showBookmarks = true { didSet { scheduleSave() } }
+    var showRDSPanel = true { didSet { scheduleSave() } }
     var theme: AppTheme = .system { didSet { theme.apply(); scheduleSave() } }
     /// Visible span = sampleRate / zoom.
     private(set) var zoom: Double = 1
@@ -619,6 +620,7 @@ final class RadioController {
         fillSpectrum = s.fillSpectrum
         meterCalibration = s.meterCalibration
         showBookmarks = s.showBookmarks
+        showRDSPanel = s.showRDSPanel
         theme = s.theme ?? .system
         theme.apply()
         bookmarks = store.loadBookmarks(legacy: s.bookmarks) ?? Self.defaultBookmarks
@@ -671,6 +673,7 @@ final class RadioController {
         s.fillSpectrum = fillSpectrum
         s.meterCalibration = meterCalibration
         s.showBookmarks = showBookmarks
+        s.showRDSPanel = showRDSPanel
         s.theme = theme
         return s
     }

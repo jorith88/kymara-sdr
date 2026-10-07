@@ -124,7 +124,7 @@ struct ContentView: View {
                     ZStack {
                         MetalDisplay(radio: radio, kind: .spectrum)
                         SpectrumOverlay()
-                        if radio.mode == .wfm && radio.rdsEnabled && radio.rds.hasData {
+                        if radio.mode == .wfm && radio.rdsEnabled && radio.showRDSPanel && radio.rds.hasData {
                             GeometryReader { geo in
                                 // Keep the panel on the side away from the tuned station.
                                 let vfoOnRight = (radio.vfoFrequency - radio.viewStart) / radio.viewSpan > 0.5
@@ -162,6 +162,11 @@ struct ContentView: View {
                 Button {
                     radio.autoRange()
                 } label: { Label("Auto range", systemImage: "arrow.up.and.down.text.horizontal") }
+                Toggle(isOn: $radio.showRDSPanel) {
+                    Label("RDS panel", systemImage: "info.circle")
+                }
+                .disabled(radio.mode != .wfm || !radio.rdsEnabled)
+                .help("Show or hide the RDS panel on the spectrum (⇧⌘R)")
                 Toggle(isOn: $radio.showBookmarks) {
                     Label("Favourites", systemImage: "sidebar.right")
                 }
