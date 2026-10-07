@@ -9,6 +9,7 @@ struct TopRibbon: View {
         @Bindable var radio = radio
         HStack(alignment: .center, spacing: 14) {
             powerButton
+                .fixedSize()
 
             divider
 
@@ -64,6 +65,7 @@ struct TopRibbon: View {
             .padding(.vertical, 6)
             .background(Theme.lcd, in: RoundedRectangle(cornerRadius: 6))
             .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.border))
+            .fixedSize()
 
             // Mode + bandwidth.
             VStack(alignment: .leading, spacing: 5) {
@@ -99,18 +101,26 @@ struct TopRibbon: View {
                     .disabled(radio.mode == .wfm || radio.mode == .nfm)
                 }
             }
+            .fixedSize()
 
             Spacer(minLength: 8)
 
-            SMeterView()
-
-            divider
-
-            audioControls
-
-            divider
-
-            recordControls
+            // Drop the controls that also live in the sidebar/menu when the window is narrow.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 14) {
+                    SMeterView()
+                    divider
+                    audioControls
+                    divider
+                    recordControls
+                }
+                HStack(spacing: 14) {
+                    SMeterView()
+                    divider
+                    audioControls
+                }
+                SMeterView()
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -129,14 +139,14 @@ struct TopRibbon: View {
             VStack(spacing: 3) {
                 Image(systemName: "power")
                     .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(radio.isRunning ? Theme.green : Color.white.opacity(0.6))
+                    .foregroundStyle(radio.isRunning ? Theme.green : Theme.dim)
                     .shadow(color: radio.isRunning ? Theme.green.opacity(0.7) : .clear, radius: 6)
                 Text(radio.isRunning ? "Stop" : "Start")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(.secondary)
             }
             .frame(width: 54, height: 60)
-            .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
+            .background(Theme.fill, in: RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(radio.isRunning ? Theme.green.opacity(0.5) : Theme.border))
             .contentShape(Rectangle())
         }
@@ -207,7 +217,7 @@ struct TopRibbon: View {
             .frame(width: 84, alignment: .leading)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
-            .background(Color.white.opacity(active ? 0.12 : 0.05), in: RoundedRectangle(cornerRadius: 4))
+            .background(active ? Theme.fillStrong : Theme.fill, in: RoundedRectangle(cornerRadius: 4))
         }
         .buttonStyle(.plain)
     }

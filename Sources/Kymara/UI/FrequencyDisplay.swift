@@ -34,6 +34,11 @@ final class FrequencyDisplayNSView: NSView {
         trackingArea = area
     }
 
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+
     private func isSmall(_ index: Int) -> Bool { index >= 7 }
 
     private func layoutDigits() -> [CGRect] {
@@ -56,15 +61,16 @@ final class FrequencyDisplayNSView: NSView {
         let value = Int64(max(0, frequency.rounded()))
         let digits = String(format: "%010lld", value).map { String($0) }
         let firstSignificant = digits.firstIndex { $0 != "0" } ?? (Self.digitCount - 1)
-        let bright = NSColor(red: 0.88, green: 0.96, blue: 1, alpha: 1)
-        let dimColor = NSColor(white: 1, alpha: 0.16)
-        let accent = NSColor(red: 0.25, green: 0.72, blue: 1, alpha: 1)
+        let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let bright = dark ? NSColor(red: 0.88, green: 0.96, blue: 1, alpha: 1) : NSColor(red: 0.05, green: 0.12, blue: 0.22, alpha: 1)
+        let dimColor = dark ? NSColor(white: 1, alpha: 0.16) : NSColor(white: 0, alpha: 0.18)
+        let accent = dark ? NSColor(red: 0.25, green: 0.72, blue: 1, alpha: 1) : NSColor(red: 0, green: 0.47, blue: 0.85, alpha: 1)
         let baseline = bounds.height - 9
 
         for (i, rect) in digitRects.enumerated() {
             if i == hoverDigit {
                 let path = NSBezierPath(roundedRect: rect.insetBy(dx: 0, dy: 1), xRadius: 3, yRadius: 3)
-                NSColor(white: 1, alpha: 0.08).setFill()
+                (dark ? NSColor(white: 1, alpha: 0.08) : NSColor(white: 0, alpha: 0.07)).setFill()
                 path.fill()
                 let half = NSRect(x: rect.minX, y: hoverUpper ? rect.minY + 1 : rect.midY, width: rect.width, height: rect.height / 2 - 1)
                 accent.withAlphaComponent(0.18).setFill()
