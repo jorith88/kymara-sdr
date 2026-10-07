@@ -11,8 +11,10 @@ enum WaterfallPalette: String, CaseIterable, Identifiable, Codable {
 
     var id: String { rawValue }
 
-    /// Gradient stops (position, r, g, b).
-    private var stops: [(Double, Double, Double, Double)] {
+    /// Gradient stops (position, r, g, b). The light variant maps the noise floor to near-white and
+    /// strong signals to dark, saturated colours.
+    private func stops(light: Bool) -> [(Double, Double, Double, Double)] {
+        if light { return lightStops }
         switch self {
         case .classic:
             return [(0, 0, 0, 0.05), (0.2, 0, 0.05, 0.45), (0.4, 0, 0.55, 0.9), (0.6, 0.1, 0.95, 0.6),
@@ -32,8 +34,28 @@ enum WaterfallPalette: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    func rgba(count: Int = 256) -> [UInt8] {
-        let s = stops
+    private var lightStops: [(Double, Double, Double, Double)] {
+        switch self {
+        case .classic:
+            return [(0, 0.98, 0.99, 1), (0.3, 0.86, 0.92, 0.98), (0.5, 0.55, 0.75, 0.95), (0.65, 0.3, 0.7, 0.55),
+                    (0.78, 0.95, 0.75, 0.1), (0.9, 0.9, 0.3, 0), (1, 0.5, 0, 0.05)]
+        case .turbo:
+            return [(0, 0.98, 0.98, 0.99), (0.3, 0.82, 0.9, 0.98), (0.45, 0.45, 0.7, 0.95), (0.58, 0.25, 0.78, 0.6),
+                    (0.7, 0.65, 0.85, 0.2), (0.8, 0.97, 0.65, 0.15), (0.9, 0.9, 0.3, 0.07), (1, 0.48, 0.02, 0.01)]
+        case .viridis:
+            return [(0, 0.98, 0.98, 0.94), (0.35, 0.82, 0.9, 0.6), (0.6, 0.13, 0.57, 0.55),
+                    (0.8, 0.23, 0.32, 0.55), (1, 0.27, 0, 0.33)]
+        case .hot:
+            return [(0, 1, 1, 1), (0.4, 1, 0.93, 0.7), (0.65, 1, 0.6, 0.1), (0.85, 0.8, 0.15, 0), (1, 0.35, 0, 0)]
+        case .blue:
+            return [(0, 0.98, 0.99, 1), (0.45, 0.75, 0.85, 0.97), (0.75, 0.15, 0.4, 0.8), (1, 0, 0.08, 0.3)]
+        case .grayscale:
+            return [(0, 1, 1, 1), (1, 0, 0, 0)]
+        }
+    }
+
+    func rgba(count: Int = 256, light: Bool = false) -> [UInt8] {
+        let s = stops(light: light)
         var out = [UInt8](repeating: 255, count: count * 4)
         for i in 0..<count {
             let x = Double(i) / Double(count - 1)
@@ -49,11 +71,11 @@ enum WaterfallPalette: String, CaseIterable, Identifiable, Codable {
     }
 
     @MainActor
-    func makeTexture(device: MTLDevice) -> MTLTexture? {
+    func makeTexture(device: MTLDevice, light: Bool) -> MTLTexture? {
         let desc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm, width: 256, height: 1, mipmapped: false)
         desc.usage = .shaderRead
         guard let tex = device.makeTexture(descriptor: desc) else { return nil }
-        let bytes = rgba()
+        let bytes = rgba(light: light)
         tex.replace(region: MTLRegionMake2D(0, 0, 256, 1), mipmapLevel: 0, withBytes: bytes, bytesPerRow: 256 * 4)
         return tex
     }

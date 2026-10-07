@@ -4,6 +4,7 @@ import SDRCore
 /// Axis labels and readouts drawn over the Metal spectrum.
 struct SpectrumOverlay: View {
     @Environment(RadioController.self) private var radio
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         GeometryReader { geo in
@@ -12,6 +13,7 @@ struct SpectrumOverlay: View {
             let top = radio.spectrumTop
             let bottom = min(radio.spectrumBottom, top - 10)
             let fTicks = Axis.frequencyTicks(start: start, end: start + span, width: w)
+            let scale: Color = radio.displayTheme.isLight(in: colorScheme) ? Color(red: 0.05, green: 0.1, blue: 0.2) : .white
 
             ZStack(alignment: .topLeading) {
                 // dB scale.
@@ -19,7 +21,7 @@ struct SpectrumOverlay: View {
                     let y = h - (db - bottom) / (top - bottom) * h
                     Text("\(Int(db))")
                         .font(.system(size: 9.5, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(scale.opacity(0.5))
                         .position(x: 16, y: min(max(y, 7), h - 7))
                 }
                 // Frequency scale.
@@ -27,7 +29,7 @@ struct SpectrumOverlay: View {
                     let x = (f - start) / span * w
                     Text(Axis.frequencyLabel(f, step: fTicks.step))
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(scale.opacity(0.6))
                         .fixedSize()
                         .position(x: min(max(x, 30), w - 30), y: h - 8)
                 }
@@ -61,7 +63,7 @@ struct SpectrumOverlay: View {
                 if radio.zoom > 1.01 {
                     Text(String(format: "Zoom ×%.1f · span %@", radio.zoom, FrequencyFormat.bandwidth(span)))
                         .font(.system(size: 9.5))
-                        .foregroundStyle(.white.opacity(0.55))
+                        .foregroundStyle(scale.opacity(0.55))
                         .fixedSize()
                         .position(x: w - 90, y: 28)
                 }

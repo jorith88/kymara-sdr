@@ -109,6 +109,7 @@ final class RadioController {
     var showBookmarks = true { didSet { scheduleSave() } }
     var showRDSPanel = true { didSet { scheduleSave() } }
     var theme: AppTheme = .system { didSet { theme.apply(); scheduleSave() } }
+    var displayTheme: DisplayTheme = .auto { didSet { scheduleSave() } }
     /// Visible span = sampleRate / zoom.
     private(set) var zoom: Double = 1
     /// View centre relative to the tuner centre frequency.
@@ -631,6 +632,7 @@ final class RadioController {
         meterCalibration = s.meterCalibration
         showBookmarks = s.showBookmarks
         showRDSPanel = s.showRDSPanel
+        displayTheme = s.displayTheme
         theme = s.theme ?? .system
         theme.apply()
         bookmarks = store.loadBookmarks(legacy: s.bookmarks) ?? Self.defaultBookmarks
@@ -685,6 +687,7 @@ final class RadioController {
         s.meterCalibration = meterCalibration
         s.showBookmarks = showBookmarks
         s.showRDSPanel = showRDSPanel
+        s.displayTheme = displayTheme
         s.theme = theme
         return s
     }

@@ -68,6 +68,7 @@ struct RadioSettings: Codable {
     var showBookmarks = true
     var showRDSPanel = true
     var theme: AppTheme? = nil
+    var displayTheme: DisplayTheme = .auto
     /// Legacy: favourites used to live in this blob. Read for migration only.
     var bookmarks: [Bookmark]? = nil
 }
@@ -123,6 +124,7 @@ extension RadioSettings {
         read(.meterCalibration, &meterCalibration)
         read(.showBookmarks, &showBookmarks)
         read(.showRDSPanel, &showRDSPanel)
+        read(.displayTheme, &displayTheme)
         theme = c.lenient(AppTheme.self, .theme)
         bookmarks = c.lenient(LossyArray<Bookmark>.self, .bookmarks)?.elements
     }
