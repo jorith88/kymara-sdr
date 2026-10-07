@@ -297,6 +297,19 @@ final class DSPTests: XCTestCase {
         XCTAssertEqual(zeroCrossingFrequency(tail, sampleRate: rate), 700, accuracy: 15)
     }
 
+    func testNFMAudioPassesSpeechAndRemovesCTCSS() {
+        func peak(_ f: Double, amplitude: Float) -> Float {
+            var audio = NFMAudio(sampleRate: 48_000)
+            var x = (0..<48_000).map { amplitude * Float(sin(2 * .pi * f * Double($0) / 48_000)) }
+            x.withUnsafeMutableBufferPointer { audio.process($0.baseAddress!, count: $0.count) }
+            return x[24_000...].map(abs).max()!
+        }
+        XCTAssertEqual(peak(1_000, amplitude: 0.5), 0.5, accuracy: 0.03)
+        XCTAssertLessThan(peak(71.9, amplitude: 0.5), 0.01)
+        XCTAssertLessThan(peak(8_000, amplitude: 0.5), 0.02)
+        XCTAssertLessThanOrEqual(peak(1_000, amplitude: 3), 1)
+    }
+
     func testSquelchMutesWeakSignal() {
         let fs = 2_400_000.0
         let iq = makeIQ(sampleRate: fs, seconds: 0.5, noise: 0.01) { _, _ in (0, 0) }

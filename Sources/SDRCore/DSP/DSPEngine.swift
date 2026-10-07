@@ -100,6 +100,7 @@ public final class DSPEngine: @unchecked Sendable {
     private var agc = AGC(sampleRate: 48_000)
     private var notch = AutoNotch(sampleRate: 48_000)
     private var dcBlock = DCBlocker(cutoff: 30, sampleRate: 48_000)
+    private var nfmAudio = NFMAudio(sampleRate: 48_000)
     private var deemphL = Deemphasis(tau: 0, sampleRate: 48_000)
     private var deemphR = Deemphasis(tau: 0, sampleRate: 48_000)
     private var dcI: Float = 0
@@ -184,7 +185,8 @@ public final class DSPEngine: @unchecked Sendable {
             }
             fm = FMDemodulator()
             agc = AGC(sampleRate: ra)
-            dcBlock = DCBlocker(cutoff: c.mode == .nfm ? 250 : 40, sampleRate: ra)
+            dcBlock = DCBlocker(cutoff: 40, sampleRate: ra)
+            nfmAudio = NFMAudio(sampleRate: ra)
             mixer = Mixer()
             cwMixer = Mixer()
             envM2 = 0
@@ -474,8 +476,11 @@ public final class DSPEngine: @unchecked Sendable {
                         if useNotch { notch.process(out, count: n, maxFrequency: notchMax) }
                         agc.process(out, count: n, mode: c.agcMode, manualGainDB: c.afGainDB)
                     case .nfm:
-                        fm.process(re: re, im: im, count: n, gain: Float(ra / (2 * .pi * 5_000)), output: out)
-                        dcBlock.process(out, count: n)
+                        // Full scale at the channel's nominal peak deviation (bandwidth / 5: 2.5 kHz in a
+                        // 12.5 kHz channel, 5 kHz in 25 kHz).
+                        let deviation = c.bandwidth / 5
+                        fm.process(re: re, im: im, count: n, gain: Float(ra / (2 * .pi * deviation)), output: out)
+                        nfmAudio.process(out, count: n)
                     case .usb, .lsb, .dsb:
                         out.update(from: re, count: n)
                         if useNotch { notch.process(out, count: n, maxFrequency: notchMax) }
