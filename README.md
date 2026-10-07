@@ -34,6 +34,10 @@ auto-range. S-meter (S1–S9+60, dBm-schatting en dBFS, piek- en squelchmarkerin
 
 **Favorieten:** gegroepeerd, filterbaar, bewerkbaar.
 
+**Instellingen** worden automatisch bewaard in `~/Library/Preferences/nl.pa3jh.kymara.plist` en blijven bij
+updates behouden. Elk veld wordt los ingelezen (ontbrekend of onbekend → standaardwaarde), favorieten staan
+onder een eigen sleutel, en onleesbare data wordt als back-up bewaard in plaats van overschreven.
+
 ## Bediening
 
 | Actie | Spectrum / waterfall |

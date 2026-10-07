@@ -11,6 +11,7 @@ let package = Package(
         .target(name: "SDRCore", path: "Sources/SDRCore"),
         .executableTarget(name: "Kymara", dependencies: ["SDRCore"], path: "Sources/Kymara"),
         .testTarget(name: "SDRCoreTests", dependencies: ["SDRCore"], path: "Tests/SDRCoreTests"),
+        .testTarget(name: "KymaraTests", dependencies: ["Kymara"], path: "Tests/KymaraTests"),
     ],
     swiftLanguageModes: [.v5]
 )
