@@ -57,7 +57,7 @@ struct SMeterView: View {
                     let lit = frac < level
                     let base: Color = frac < 0.6 ? Theme.green : (frac < 0.8 ? Theme.amber : Theme.red)
                     ctx.fill(Path(roundedRect: CGRect(x: x, y: barTop, width: segW, height: barH), cornerRadius: 1),
-                             with: .color(lit ? base : base.opacity(0.12)))
+                             with: .color(lit ? base : base.opacity(0.25)))
                 }
                 // Peak marker.
                 if radio.isRunning {
@@ -89,6 +89,10 @@ struct SMeterView: View {
             .drawingGroup()
             .accessibilityHidden(true)
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Theme.lcd, in: RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.border))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Signal strength")
         .accessibilityValue(radio.isRunning ? "\(Self.sUnits(dbm)), \(String(format: "%.0f", dbm)) dBm" : "Radio stopped")
