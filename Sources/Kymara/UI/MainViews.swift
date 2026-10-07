@@ -152,9 +152,12 @@ struct ContentView: View {
                         }
                     }
                 } bottom: {
-                    MetalDisplay(radio: radio, kind: .waterfall)
-                        .accessibilityElement()
-                        .accessibilityLabel("Waterfall")
+                    VStack(spacing: 0) {
+                        MetalDisplay(radio: radio, kind: .waterfall)
+                            .accessibilityElement()
+                            .accessibilityLabel("Waterfall")
+                        BandOverview()
+                    }
                 }
                 if radio.showBookmarks {
                     Rectangle().fill(Theme.border).frame(width: 1)
