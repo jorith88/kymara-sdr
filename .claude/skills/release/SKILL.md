@@ -1,0 +1,79 @@
+---
+name: release
+description: Build Kymara as a .dmg and publish it as a GitHub release. Usage: /release <version>, e.g. /release 1.0.0-beta.2
+argument-hint: <version>
+disable-model-invocation: true
+---
+
+Release Kymara version `$ARGUMENTS` as a .dmg on GitHub (repo `jorith88/kymara-sdr`). Follow these steps in order
+and stop at the first failure and report it. Do not ask for confirmation between steps: invoking `/release` is the
+go-ahead.
+
+## 1. Check inputs and state
+
+- The version must be semver without a leading `v` (`1.2.3` or `1.2.3-beta.1`). If `$ARGUMENTS` is empty or invalid,
+  ask for the version and stop.
+- The tag is `v<version>`. Stop if it already exists locally (`git tag -l`) or on GitHub (`gh release view`).
+- The tree must be clean and on `main`, up to date with `origin/main` (`git fetch` first).
+
+## 2. Test
+
+`swift test -c release`. All tests must pass. rtk filters the output, so read the per-suite totals with
+`rtk proxy swift test -c release 2>&1 | grep -E "Test Suite '.*' (passed|failed)|Executed"`.
+
+## 3. Set the version in `Resources/Info.plist`
+
+- `CFBundleShortVersionString` = the numeric part only (`1.0.0-beta.2` → `1.0.0`). Apple does not allow suffixes
+  there; the pre-release label lives in the tag and file name.
+- `CFBundleVersion` = the current value + 1. Every release gets a higher build number.
+
+Use `/usr/libexec/PlistBuddy -c 'Set :Key value' Resources/Info.plist`.
+
+## 4. Build and verify the DMG
+
+`./scripts/make-dmg.sh <version>` → `build/Kymara-<version>.dmg`. Then verify:
+
+- `hdiutil verify` reports a VALID checksum.
+- Mount it read-only (`hdiutil attach -nobrowse -readonly`). It must contain `Kymara.app` and an `Applications`
+  symlink, `Contents/Frameworks` must contain `librtlsdr.0.dylib` and `libusb-1.0.0.dylib`, and
+  `codesign -v --deep` must pass. Detach it afterwards.
+
+If librtlsdr was not bundled (the build prints a warning), stop: the release would need Homebrew.
+
+## 5. Commit, tag, push
+
+- Commit the Info.plist change: `Release <version>` (no Co-Authored-By trailer).
+- Create an annotated tag: `git tag -a v<version> -m "Kymara <version>"`.
+- `git push origin main v<version>`. GitHub sometimes returns `Internal Server Error` on push even when its status page
+  is green. If so, retry in the background (every 20 s, a few minutes), then check with `git ls-remote origin`.
+  Push the branch and tag separately if only one went through.
+
+## 6. Release notes
+
+Write them in English to a file in the scratchpad. Base them on `git log <previous tag>..v<version> --format=%s`
+(or the whole history for the first release), grouped into user-facing changes. Leave out internal commits (tests,
+CLAUDE.md, scripts). Always include this install section:
+
+```markdown
+## Install
+
+1. Download `Kymara-<version>.dmg`, open it and drag **Kymara** to **Applications**.
+2. The app is ad-hoc signed, not notarized. On first launch macOS will block it: right-click Kymara → **Open**, or
+   allow it under System Settings → Privacy & Security → **Open Anyway**.
+
+librtlsdr and libusb are bundled, so Homebrew is not required. Requires Apple silicon and macOS 14 or later.
+```
+
+## 7. Publish
+
+```bash
+gh release create v<version> build/Kymara-<version>.dmg --verify-tag --title "Kymara <version>" \
+  --notes-file <notes> [--prerelease]
+```
+
+Add `--prerelease` when the version contains `-` (beta, rc, …). Then check
+`gh release view v<version> --json url,isPrerelease,assets` and confirm the asset's state is `uploaded`.
+
+## 8. Report
+
+Report the release URL, the DMG size, the test results and the build number. Also mention any push retries.
