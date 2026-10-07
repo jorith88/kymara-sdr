@@ -120,19 +120,27 @@ struct ContentView: View {
                 Sidebar()
                     .frame(width: 290)
                 Rectangle().fill(Theme.border).frame(width: 1)
-                VStack(spacing: 0) {
-                    if radio.mode == .wfm && radio.rdsEnabled {
-                        RDSBar()
-                    }
-                    VSplitView {
-                        ZStack {
-                            MetalDisplay(radio: radio, kind: .spectrum)
-                            SpectrumOverlay()
+                VSplitView {
+                    ZStack {
+                        MetalDisplay(radio: radio, kind: .spectrum)
+                        SpectrumOverlay()
+                        if radio.mode == .wfm && radio.rdsEnabled && radio.rds.hasData {
+                            GeometryReader { geo in
+                                // Keep the panel on the side away from the tuned station.
+                                let vfoOnRight = (radio.vfoFrequency - radio.viewStart) / radio.viewSpan > 0.5
+                                RDSOverlay(availableHeight: geo.size.height)
+                                    .padding(.top, 38)
+                                    .padding(.horizontal, vfoOnRight ? 44 : 14)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity,
+                                           alignment: vfoOnRight ? .topLeading : .topTrailing)
+                                    .animation(.easeInOut(duration: 0.25), value: vfoOnRight)
+                            }
+                            .allowsHitTesting(false)
                         }
-                        .frame(minHeight: 140, idealHeight: 320)
-                        MetalDisplay(radio: radio, kind: .waterfall)
-                            .frame(minHeight: 100, idealHeight: 420)
                     }
+                    .frame(minHeight: 140, idealHeight: 320)
+                    MetalDisplay(radio: radio, kind: .waterfall)
+                        .frame(minHeight: 100, idealHeight: 420)
                 }
                 if radio.showBookmarks {
                     Rectangle().fill(Theme.border).frame(width: 1)

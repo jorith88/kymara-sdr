@@ -23,7 +23,7 @@ pitch) and DSB. Adjustable bandwidth (presets or by dragging the filter edges), 
 (off/fast/medium/slow) or manual AF gain, squelch with hysteresis, volume/mute.
 
 **RDS (WFM):** programme service name, PI code, programme type, TP/TA, RadioText and clock time, with
-error correction of short bursts. Shown in a bar above the spectrum; new favourites are named after the station.
+error correction of short bursts. Shown as a panel over the spectrum; new favourites are named after the station.
 
 **RF/tuner:** sample rate 0.25–3.2 MS/s, RF gain or tuner AGC, RTL AGC, PPM correction, direct sampling (HF),
 bias-T, offset tuning, DC correction, I/Q swap, overload indicator.
