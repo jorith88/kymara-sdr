@@ -3,6 +3,11 @@
 Native macOS receiver for RTL-SDR dongles (Apple silicon), inspired by SDR Console.
 Swift + SwiftUI, DSP with Accelerate/vDSP, spectrum and waterfall rendered on the GPU with Metal.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshot-dark.png">
+  <img alt="Kymara receiving an FM broadcast station with RDS" src="docs/screenshot-light.png">
+</picture>
+
 ## Building and running
 
 ```bash
