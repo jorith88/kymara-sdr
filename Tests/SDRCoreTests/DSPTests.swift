@@ -239,6 +239,64 @@ final class DSPTests: XCTestCase {
         XCTAssertFalse(engine.status.squelchOpen)
     }
 
+    /// FM carrier (1 kHz tone, given deviation) plus uniform noise; returns status and audio after the run.
+    private func runAutoSquelch(mode: DemodMode, bandwidth: Double, deviation: Double,
+                                amplitude: Double, noise: Float) -> (status: DSPStatus, audio: [Float]) {
+        let fs = 2_400_000.0
+        let offset = 200_000.0
+        var phase = 0.0
+        let iq = makeIQ(sampleRate: fs, seconds: 0.6, noise: noise) { _, t in
+            phase += 2 * .pi * (offset + deviation * sin(2 * .pi * 1_000 * t)) / fs
+            return (Float(amplitude * cos(phase)), Float(amplitude * sin(phase)))
+        }
+        let engine = DSPEngine()
+        var c = DSPConfig()
+        c.sampleRate = fs
+        c.vfoOffset = offset
+        c.mode = mode
+        c.bandwidth = bandwidth
+        c.volume = 1
+        c.squelchEnabled = true
+        c.squelchAuto = true
+        c.squelchLevel = 0  // ignored in auto mode
+        engine.config = c
+        let (l, _) = runEngine(engine, iq: iq)
+        return (engine.status, l)
+    }
+
+    func testAutoSquelchClosedOnNoise() {
+        for (mode, bw) in [(DemodMode.nfm, 12_500.0), (.wfm, 180_000)] {
+            let r = runAutoSquelch(mode: mode, bandwidth: bw, deviation: 0, amplitude: 0, noise: 0.05)
+            XCTAssertFalse(r.status.squelchOpen, "\(mode)")
+            XCTAssertLessThan(r.status.snrDB ?? 99, 3, "\(mode)")
+            XCTAssertEqual(rms(r.audio[...]), 0, "\(mode)")
+        }
+    }
+
+    func testAutoSquelchOpensOnFMCarrier() {
+        // Weak in absolute terms (−40 dBFS) but clean: auto squelch must not depend on level.
+        let nfm = runAutoSquelch(mode: .nfm, bandwidth: 12_500, deviation: 2_500, amplitude: 0.01, noise: 0.002)
+        XCTAssertTrue(nfm.status.squelchOpen)
+        XCTAssertGreaterThan(nfm.status.snrDB ?? 0, 15)
+        XCTAssertGreaterThan(rms(nfm.audio[(nfm.audio.count / 2)...]), 0.1)
+
+        // Full-deviation broadcast FM: the channel filter clips sidebands, which must not read as noise.
+        let wfm = runAutoSquelch(mode: .wfm, bandwidth: 180_000, deviation: 75_000, amplitude: 0.3, noise: 0.002)
+        XCTAssertTrue(wfm.status.squelchOpen)
+        XCTAssertGreaterThan(wfm.status.snrDB ?? 0, 12)
+    }
+
+    func testSNREstimateIsCalibrated() {
+        // Uniform noise ±a per component: complex power 2a²/3 over the full sample rate.
+        let fs = 2_400_000.0, bw = 12_500.0, a: Float = 0.1
+        let noisePower = 2 * Double(a * a) / 3 * bw / fs
+        for target in [0.0, 10.0, 20.0] {
+            let amp = (noisePower * pow(10, target / 10)).squareRoot()
+            let r = runAutoSquelch(mode: .nfm, bandwidth: bw, deviation: 2_000, amplitude: amp, noise: a)
+            XCTAssertEqual(Double(r.status.snrDB ?? -99), target, accuracy: target == 0 ? 4 : 2.5)
+        }
+    }
+
     func testSpectrumPeakAtToneFrequency() {
         let fs = 2_400_000.0
         let iq = makeIQ(sampleRate: fs, seconds: 0.2) { _, t in

@@ -9,6 +9,9 @@ public struct DSPConfig: Equatable, Sendable {
     public var bandwidth: Double = 180_000
     public var squelchEnabled = false
     public var squelchLevel: Float = -60
+    /// FM modes: open on carrier-to-noise ratio instead of level, so no threshold needs setting.
+    /// Other modes fall back to the level squelch.
+    public var squelchAuto = false
     public var agcMode: AGCMode = .medium
     public var afGainDB: Float = 20
     public var volume: Float = 0.5
@@ -33,6 +36,8 @@ public struct DSPConfig: Equatable, Sendable {
 public struct DSPStatus: Sendable {
     public var levelDB: Float = -150
     public var squelchOpen = false
+    /// Estimated carrier-to-noise ratio in the channel (FM modes only).
+    public var snrDB: Float?
     public var stereoLocked = false
     public var audioRate: Double = 48_000
     public var agcGainDB: Float = 0
@@ -97,6 +102,10 @@ public final class DSPEngine: @unchecked Sendable {
     private var dcI: Float = 0
     private var dcQ: Float = 0
     private var squelchOpen = false
+    private var squelchHang: Double = 0
+    private var envM2: Double = 0
+    private var envM4: Double = 0
+    private var snrDB: Float = -20
     private var rateCounter = 0
     private var rateStart = DispatchTime.now().uptimeNanoseconds
 
@@ -105,6 +114,7 @@ public final class DSPEngine: @unchecked Sendable {
     private var bufI: [Float] = []
     private var bufQ: [Float] = []
     private var demod: [Float] = []
+    private var mags: [Float] = []
     private var left: [Float] = []
     private var right: [Float] = []
     private var outL: [Float] = []
@@ -174,6 +184,9 @@ public final class DSPEngine: @unchecked Sendable {
             dcBlock = DCBlocker(cutoff: c.mode == .nfm ? 250 : 40, sampleRate: ra)
             mixer = Mixer()
             cwMixer = Mixer()
+            envM2 = 0
+            envM4 = 0
+            snrDB = -20
             audioRing.reset(sampleRate: ra)
             if recorder.isRecordingAudio { recorder.stopAudio() }
         }
@@ -288,6 +301,7 @@ public final class DSPEngine: @unchecked Sendable {
             }
             guard nc > 0 else { return }
             levelDB = channelPower(nc)
+            updateSNR(nc, rate: rates.rate1)
             ensure(&demod, nc)
             let gain = Float(rates.rate1 / (2 * .pi * 75_000))
             channel.outRe.withUnsafeBufferPointer { re in
@@ -326,6 +340,7 @@ public final class DSPEngine: @unchecked Sendable {
             }
             guard nc > 0 else { return }
             levelDB = channelPower(nc)
+            if c.mode == .nfm { updateSNR(nc, rate: rates.audioRate) }
             ensure(&left, nc)
             ensure(&right, nc)
             demodulateNarrow(nc, c)
@@ -333,8 +348,17 @@ public final class DSPEngine: @unchecked Sendable {
             right.withUnsafeMutableBufferPointer { r in left.withUnsafeBufferPointer { r.baseAddress!.update(from: $0.baseAddress!, count: nc) } }
         }
 
-        // Squelch with 3 dB hysteresis.
-        if c.squelchEnabled {
+        // Squelch with 3 dB hysteresis. Auto (FM): open above 6 dB C/N, close after a short hang below 3 dB.
+        let isFM = c.mode == .wfm || c.mode == .nfm
+        if c.squelchEnabled && c.squelchAuto && isFM {
+            if snrDB > 6 {
+                squelchOpen = true
+                squelchHang = 0.15
+            } else if snrDB < 3 {
+                squelchHang -= Double(audioCount) / rates.audioRate
+                if squelchHang <= 0 { squelchOpen = false }
+            }
+        } else if c.squelchEnabled {
             squelchOpen = squelchOpen ? levelDB > c.squelchLevel - 3 : levelDB > c.squelchLevel
         } else {
             squelchOpen = true
@@ -365,10 +389,12 @@ public final class DSPEngine: @unchecked Sendable {
         let locked = stereo?.locked ?? false
         let rdsInfo = c.mode == .wfm && c.rds ? rds?.info : nil
         let open = squelchOpen
+        let snr: Float? = isFM ? snrDB : nil
         let audioRate = rates.audioRate
         statusLock.withLock {
             currentStatus.levelDB = levelDB
             currentStatus.squelchOpen = open
+            currentStatus.snrDB = snr
             currentStatus.stereoLocked = locked && c.mode == .wfm
             currentStatus.audioRate = audioRate
             currentStatus.agcGainDB = agcGain
@@ -396,6 +422,30 @@ public final class DSPEngine: @unchecked Sendable {
         vDSP_measqv(channel.outRe, 1, &pr, vDSP_Length(n))
         vDSP_measqv(channel.outIm, 1, &pi, vDSP_Length(n))
         return 10 * log10f(max(pr + pi, 1e-15))
+    }
+
+    /// Carrier-to-noise estimate from the envelope moments of the channel output (M2M4 estimator).
+    /// An FM carrier has a constant envelope, noise a Rayleigh one, so this works at any signal level.
+    private func updateSNR(_ n: Int, rate: Double) {
+        ensure(&mags, n)
+        channel.outRe.withUnsafeBufferPointer { rp in
+            channel.outIm.withUnsafeBufferPointer { ip in
+                var split = DSPSplitComplex(realp: UnsafeMutablePointer(mutating: rp.baseAddress!),
+                                            imagp: UnsafeMutablePointer(mutating: ip.baseAddress!))
+                vDSP_zvmags(&split, 1, &mags, 1, vDSP_Length(n))
+            }
+        }
+        var m2: Float = 0, m4: Float = 0
+        vDSP_meanv(mags, 1, &m2, vDSP_Length(n))
+        vDSP_measqv(mags, 1, &m4, vDSP_Length(n))
+        // Average the moments over ~30 ms; they are normalised by M2² below, so level changes cancel.
+        let a = envM2 == 0 ? 1 : 1 - exp(-Double(n) / rate / 0.03)
+        envM2 += a * (Double(m2) - envM2)
+        envM4 += a * (Double(m4) - envM4)
+        guard envM2 > 0 else { return }
+        let s = (max(0, 2 * envM2 * envM2 - envM4)).squareRoot()
+        let noise = max(envM2 - s, 1e-12)
+        snrDB = Float(10 * log10(max(s / noise, 1e-3)))
     }
 
     private func demodulateNarrow(_ n: Int, _ c: DSPConfig) {

@@ -193,8 +193,23 @@ struct ReceiverPanel: View {
                     .fill(radio.squelchOpen ? Theme.green : Theme.red.opacity(0.6))
                     .frame(width: 8, height: 8)
             }
+            if radio.mode == .nfm || radio.mode == .wfm {
+                Row("Auto (FM)") {
+                    Toggle("", isOn: $radio.squelchAuto)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .disabled(!radio.squelchEnabled)
+                        .help("Open on carrier-to-noise ratio instead of signal level")
+                    if let snr = radio.snrDB {
+                        // Padded and monospaced so the row does not resize as the value changes.
+                        Text(String(format: "SNR %3.0f dB", snr))
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
             ValueSlider(label: "Level", value: $radio.squelchLevel, range: -120...0, format: { String(format: "%.0f dBFS", $0) })
-                .disabled(!radio.squelchEnabled)
+                .disabled(!radio.squelchEnabled || radio.autoSquelchActive)
             ValueSlider(label: "Volume", value: $radio.volume, range: 0...1, format: { String(format: "%.0f %%", $0 * 100) })
         }
     }
