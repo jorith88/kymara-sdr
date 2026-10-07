@@ -22,6 +22,28 @@ enum AppTheme: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+/// Theme of the spectrum and waterfall, independent of the app theme.
+enum DisplayTheme: String, CaseIterable, Identifiable, Codable {
+    case auto = "Auto"
+    case light = "Light"
+    case dark = "Dark"
+
+    var id: String { rawValue }
+
+    /// Resolves `auto` against the appearance the display is shown in.
+    func isLight(in appearance: NSAppearance) -> Bool {
+        switch self {
+        case .auto: return appearance.bestMatch(from: [.darkAqua, .aqua]) == .aqua
+        case .light: return true
+        case .dark: return false
+        }
+    }
+
+    func isLight(in scheme: ColorScheme) -> Bool {
+        self == .auto ? scheme == .light : self == .light
+    }
+}
+
 extension NSColor {
     /// Colour that resolves per appearance (light/dark).
     static func adaptive(light: NSColor, dark: NSColor) -> NSColor {

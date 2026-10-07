@@ -42,7 +42,7 @@ struct WaterfallUniforms {
     float filterEnd;
     float vfo;
     float texelsPerPixel;
-    float pad;
+    float light;
 };
 
 vertex VOut quadVertex(uint vid [[vertex_id]]) {
@@ -90,11 +90,11 @@ fragment float4 waterfallFragment(VOut in [[stage_in]],
     float level = clamp((db - u.minDB) / max(u.maxDB - u.minDB, 1.0), 0.0, 1.0);
     float4 c = float4(palette.sample(paletteSampler, float2(level, 0.5)));
     if (x < 0.0 || x > 1.0) {
-        c.rgb = float3(0.03, 0.035, 0.05);
+        c.rgb = u.light > 0.5 ? float3(0.86, 0.87, 0.89) : float3(0.03, 0.035, 0.05);
     }
     // Passband tint and VFO line.
     if (xs >= u.filterStart && xs <= u.filterEnd) {
-        c.rgb = mix(c.rgb, float3(1.0), 0.10);
+        c.rgb = u.light > 0.5 ? mix(c.rgb, float3(0.0, 0.2, 0.45), 0.08) : mix(c.rgb, float3(1.0), 0.10);
     }
     float px = fwidth(xs);
     if (abs(xs - u.vfo) < px * 0.75) {
@@ -121,7 +121,7 @@ struct WaterfallUniforms {
     var filterEnd: Float = 0
     var vfo: Float = 0
     var texelsPerPixel: Float = 1
-    var pad: Float = 0
+    var light: Float = 0
 }
 
 @MainActor

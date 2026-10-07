@@ -12,6 +12,25 @@ private extension SIMD4 where Scalar == Float {
     static func rgba(_ r: Float, _ g: Float, _ b: Float, _ a: Float = 1) -> SIMD4<Float> { SIMD4(r, g, b, a) }
 }
 
+/// Colours for the spectrum display, per theme.
+private struct SpectrumColors {
+    let bgTop, bgBottom, outside, grid, passband, passbandEdge, fillTop, fillBottom, peak, trace, hover, vfo, centre: SIMD4<Float>
+
+    static let dark = SpectrumColors(
+        bgTop: .rgba(0.05, 0.08, 0.15), bgBottom: .rgba(0.01, 0.015, 0.03), outside: .rgba(0, 0, 0, 0.45),
+        grid: .rgba(0.45, 0.6, 0.8, 0.16), passband: .rgba(0.75, 0.82, 0.95, 0.13), passbandEdge: .rgba(0.8, 0.88, 1, 0.45),
+        fillTop: .rgba(0.15, 0.55, 0.95, 0.45), fillBottom: .rgba(0.05, 0.25, 0.6, 0.05), peak: .rgba(1, 0.75, 0.25, 0.65),
+        trace: .rgba(0.85, 0.95, 1, 1), hover: .rgba(1, 1, 1, 0.35), vfo: .rgba(1, 0.25, 0.2, 0.95),
+        centre: .rgba(1, 0.8, 0.2, 0.8))
+
+    static let light = SpectrumColors(
+        bgTop: .rgba(1, 1, 1), bgBottom: .rgba(0.9, 0.92, 0.95), outside: .rgba(0.45, 0.48, 0.52, 0.22),
+        grid: .rgba(0.15, 0.25, 0.4, 0.14), passband: .rgba(0, 0.35, 0.8, 0.09), passbandEdge: .rgba(0, 0.35, 0.75, 0.45),
+        fillTop: .rgba(0.1, 0.45, 0.9, 0.35), fillBottom: .rgba(0.1, 0.45, 0.9, 0.04), peak: .rgba(0.9, 0.5, 0, 0.75),
+        trace: .rgba(0.03, 0.2, 0.45, 1), hover: .rgba(0, 0, 0, 0.35), vfo: .rgba(0.9, 0.15, 0.12, 0.95),
+        centre: .rgba(0.9, 0.55, 0, 0.9))
+}
+
 /// Spectrum trace, fill, grid, passband and markers — all geometry rendered on the GPU.
 @MainActor
 final class SpectrumRenderer: NSObject, MTKViewDelegate {
@@ -80,6 +99,9 @@ final class SpectrumRenderer: NSObject, MTKViewDelegate {
         func x(_ f: Double) -> Float { Float((f - start) / span * 2 - 1) }
         func y(_ db: Double) -> Float { Float((db - bottom) / (top - bottom) * 2 - 1) }
 
+        let light = r.displayTheme.isLight(in: view.effectiveAppearance)
+        let colors = light ? SpectrumColors.light : SpectrumColors.dark
+
         let bandStart = r.centerFrequency - r.sampleRate / 2
         r.engine.spectrum.withLatest { spectrum, peak, _ in
             let binHz = r.sampleRate / Double(max(spectrum.count, 1))
@@ -93,15 +115,15 @@ final class SpectrumRenderer: NSObject, MTKViewDelegate {
         ranges.removeAll(keepingCapacity: true)
 
         // Background gradient.
-        let bgTop = SIMD4<Float>.rgba(0.05, 0.08, 0.15)
-        let bgBottom = SIMD4<Float>.rgba(0.01, 0.015, 0.03)
+        let bgTop = colors.bgTop
+        let bgBottom = colors.bgBottom
         add(.triangleStrip, [
             ColorVertex(position: [-1, -1], color: bgBottom), ColorVertex(position: [1, -1], color: bgBottom),
             ColorVertex(position: [-1, 1], color: bgTop), ColorVertex(position: [1, 1], color: bgTop),
         ])
 
         // Band edges outside the sampled bandwidth.
-        let outside = SIMD4<Float>.rgba(0, 0, 0, 0.45)
+        let outside = colors.outside
         let bandLo = x(bandStart), bandHi = x(bandStart + r.sampleRate)
         if bandLo > -1 {
             add(.triangleStrip, quad(-1, -1, bandLo, 1, outside))
@@ -112,7 +134,7 @@ final class SpectrumRenderer: NSObject, MTKViewDelegate {
 
         // Grid.
         let pointsWidth = Double(width) / scale
-        let gridColor = SIMD4<Float>.rgba(0.45, 0.6, 0.8, 0.16)
+        let gridColor = colors.grid
         var grid: [ColorVertex] = []
         for f in Axis.frequencyTicks(start: start, end: start + span, width: pointsWidth).ticks {
             let gx = x(f)
@@ -126,8 +148,8 @@ final class SpectrumRenderer: NSObject, MTKViewDelegate {
 
         // Passband.
         let fx0 = x(r.filterStart), fx1 = x(r.filterEnd)
-        add(.triangleStrip, quad(fx0, -1, fx1, 1, .rgba(0.75, 0.82, 0.95, 0.13)))
-        let edge = SIMD4<Float>.rgba(0.8, 0.88, 1, 0.45)
+        add(.triangleStrip, quad(fx0, -1, fx1, 1, colors.passband))
+        let edge = colors.passbandEdge
         add(.line, [
             ColorVertex(position: [fx0, -1], color: edge), ColorVertex(position: [fx0, 1], color: edge),
             ColorVertex(position: [fx1, -1], color: edge), ColorVertex(position: [fx1, 1], color: edge),
@@ -138,8 +160,8 @@ final class SpectrumRenderer: NSObject, MTKViewDelegate {
         if r.fillSpectrum {
             var fill: [ColorVertex] = []
             fill.reserveCapacity(width * 2)
-            let fillTop = SIMD4<Float>.rgba(0.15, 0.55, 0.95, 0.45)
-            let fillBottom = SIMD4<Float>.rgba(0.05, 0.25, 0.6, 0.05)
+            let fillTop = colors.fillTop
+            let fillBottom = colors.fillBottom
             for c in 0..<width {
                 let px = (Float(c) + 0.5) / w * 2 - 1
                 let py = max(-1, min(1, y(Double(columns[c]))))
@@ -152,17 +174,17 @@ final class SpectrumRenderer: NSObject, MTKViewDelegate {
         // Peak hold.
         if r.peakHold, peakColumns.count == width {
             add(.triangleStrip, ribbon(peakColumns, width: width, height: height, thickness: 0.6 * scale,
-                                       color: .rgba(1, 0.75, 0.25, 0.65), y: y))
+                                       color: colors.peak, y: y))
         }
 
         // Trace as a thick ribbon (Metal lines are 1 px).
         add(.triangleStrip, ribbon(columns, width: width, height: height, thickness: 0.8 * scale,
-                                   color: .rgba(0.85, 0.95, 1, 1), y: y))
+                                   color: colors.trace, y: y))
 
         // Hover cursor.
         if let hover = r.hover {
             let hx = x(hover.frequency)
-            let c = SIMD4<Float>.rgba(1, 1, 1, 0.35)
+            let c = colors.hover
             var lines = [ColorVertex(position: [hx, -1], color: c), ColorVertex(position: [hx, 1], color: c)]
             if let db = hover.db {
                 let hy = y(db)
@@ -174,15 +196,15 @@ final class SpectrumRenderer: NSObject, MTKViewDelegate {
         // VFO line (2 px wide).
         let vx = x(r.vfoFrequency)
         let vw = Float(1.0 / Double(width) * 2 * scale * 0.75)
-        add(.triangleStrip, quad(vx - vw, -1, vx + vw, 1, .rgba(1, 0.25, 0.2, 0.95)))
+        add(.triangleStrip, quad(vx - vw, -1, vx + vw, 1, colors.vfo))
 
         // Tuner centre marker.
         let cx = x(r.centerFrequency)
         let markerH = Float(14 * scale / height)
         add(.triangle, [
-            ColorVertex(position: [cx, -1 + markerH], color: .rgba(1, 0.8, 0.2, 0.8)),
-            ColorVertex(position: [cx - markerH * Float(height) / w * 0.6, -1], color: .rgba(1, 0.8, 0.2, 0.8)),
-            ColorVertex(position: [cx + markerH * Float(height) / w * 0.6, -1], color: .rgba(1, 0.8, 0.2, 0.8)),
+            ColorVertex(position: [cx, -1 + markerH], color: colors.centre),
+            ColorVertex(position: [cx - markerH * Float(height) / w * 0.6, -1], color: colors.centre),
+            ColorVertex(position: [cx + markerH * Float(height) / w * 0.6, -1], color: colors.centre),
         ])
 
         ring.semaphore.wait()

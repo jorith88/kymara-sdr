@@ -17,6 +17,7 @@ final class WaterfallRenderer: NSObject, MTKViewDelegate {
     private var rowRate: Double = 0
     private var paletteTexture: MTLTexture?
     private var palette: WaterfallPalette?
+    private var paletteLight = false
     private var shiftBuffers: [MTLBuffer] = []
     private var shiftIndex = 0
     private var shifts = [Float](repeating: 10, count: WaterfallRenderer.rows)
@@ -86,9 +87,14 @@ final class WaterfallRenderer: NSObject, MTKViewDelegate {
         for line in r.engine.spectrum.drainLines() {
             upload(line)
         }
-        if palette != r.palette || paletteTexture == nil {
+        // The light variant has a light noise floor.
+        let light = r.displayTheme.isLight(in: view.effectiveAppearance)
+        if palette != r.palette || paletteLight != light || paletteTexture == nil {
             palette = r.palette
-            paletteTexture = r.palette.makeTexture(device: ctx.device)
+            paletteLight = light
+            paletteTexture = r.palette.makeTexture(device: ctx.device, light: light)
+            view.clearColor = light ? MTLClearColor(red: 0.97, green: 0.98, blue: 1, alpha: 1)
+                                    : MTLClearColor(red: 0.02, green: 0.025, blue: 0.04, alpha: 1)
         }
 
         guard let pass = view.currentRenderPassDescriptor, let drawable = view.currentDrawable else { return }
@@ -125,6 +131,7 @@ final class WaterfallRenderer: NSObject, MTKViewDelegate {
         u.filterStart = Float((r.filterStart - bandStart) / fs)
         u.filterEnd = Float((r.filterEnd - bandStart) / fs)
         u.vfo = Float((r.vfoFrequency - bandStart) / fs)
+        u.light = light ? 1 : 0
         u.texelsPerPixel = (u.uEnd - u.uStart) * Float(texture.width) / Float(max(1, view.drawableSize.width))
 
         guard let cmd = ctx.queue.makeCommandBuffer(), let enc = cmd.makeRenderCommandEncoder(descriptor: pass) else {

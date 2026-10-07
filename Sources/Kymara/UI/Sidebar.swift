@@ -310,6 +310,14 @@ struct DisplayPanel: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
             }
+            Row("Displays") {
+                Picker("", selection: $radio.displayTheme) {
+                    ForEach(DisplayTheme.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .help("Theme of the spectrum and waterfall; Auto follows the app theme")
+            }
             Row("FFT size") {
                 Picker("", selection: $radio.fftSize) {
                     ForEach(SpectrumAnalyzer.sizes, id: \.self) { Text("\($0)").tag($0) }
