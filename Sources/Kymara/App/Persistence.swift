@@ -44,6 +44,7 @@ struct RadioSettings: Codable {
     var volume: Double = 0.5
     var squelchEnabled = false
     var squelchLevel: Double = -50
+    var squelchAuto = false
     var agcMode: AGCMode = .medium
     var afGain: Double = 20
     var deemphasis: Deemphasis = .eu
@@ -99,6 +100,7 @@ extension RadioSettings {
         read(.volume, &volume)
         read(.squelchEnabled, &squelchEnabled)
         read(.squelchLevel, &squelchLevel)
+        read(.squelchAuto, &squelchAuto)
         read(.agcMode, &agcMode)
         read(.afGain, &afGain)
         read(.deemphasis, &deemphasis)

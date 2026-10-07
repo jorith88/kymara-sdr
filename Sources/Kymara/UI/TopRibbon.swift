@@ -179,15 +179,34 @@ struct TopRibbon: View {
                 .controlSize(.small)
                 .tint(radio.squelchOpen ? Theme.green : Theme.red)
                 .help("Squelch")
+                Toggle(isOn: $radio.squelchAuto) {
+                    Text("A").font(.system(size: 10, weight: .bold))
+                }
+                .toggleStyle(.button)
+                .controlSize(.small)
+                .disabled(!radio.squelchEnabled || !(radio.mode == .nfm || radio.mode == .wfm))
+                .help("Auto squelch (FM): open on carrier-to-noise ratio")
                 Slider(value: $radio.squelchLevel, in: -120...0)
-                    .frame(width: 98)
+                    .frame(width: 70)
                     .controlSize(.small)
-                    .disabled(!radio.squelchEnabled)
+                    .disabled(!radio.squelchEnabled || radio.autoSquelchActive)
             }
-            Text(radio.squelchEnabled ? String(format: "Squelch %.0f dBFS", radio.squelchLevel) : "Squelch off")
-                .font(.system(size: 9.5, design: .monospaced))
-                .foregroundStyle(.tertiary)
+            // The hidden longest variant reserves the width, so switching modes does not resize the group.
+            ZStack(alignment: .leading) {
+                Text("Squelch auto · SNR -99 dB").hidden()
+                Text(squelchText)
+            }
+            .font(.system(size: 9.5, design: .monospaced))
+            .foregroundStyle(.tertiary)
         }
+    }
+
+    private var squelchText: String {
+        guard radio.squelchEnabled else { return "Squelch off" }
+        if radio.autoSquelchActive {
+            return radio.snrDB.map { String(format: "Squelch auto · SNR %3.0f dB", $0) } ?? "Squelch auto"
+        }
+        return String(format: "Squelch %.0f dBFS", radio.squelchLevel)
     }
 
     private var recordControls: some View {

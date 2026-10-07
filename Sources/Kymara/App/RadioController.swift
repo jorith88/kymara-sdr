@@ -83,6 +83,10 @@ final class RadioController {
     var muted = false { didSet { pushConfig() } }
     var squelchEnabled = false { didSet { pushConfig() } }
     var squelchLevel: Double = -50 { didSet { pushConfig() } }
+    /// FM modes only; other modes keep using the level.
+    var squelchAuto = false { didSet { pushConfig() } }
+    /// Auto squelch is in effect (rather than the level threshold).
+    var autoSquelchActive: Bool { squelchEnabled && squelchAuto && (mode == .nfm || mode == .wfm) }
     var agcMode: AGCMode = .medium { didSet { pushConfig() } }
     var afGain: Double = 20 { didSet { pushConfig() } }
     var deemphasis: Deemphasis = .eu { didSet { pushConfig() } }
@@ -116,6 +120,8 @@ final class RadioController {
     private(set) var signalDB: Double = -150
     private(set) var signalPeakDB: Double = -150
     private(set) var squelchOpen = false
+    /// Carrier-to-noise estimate in FM modes.
+    private(set) var snrDB: Double?
     private(set) var stereoLocked = false
     private(set) var rds = RDSInfo()
     private(set) var overload = false
@@ -438,6 +444,7 @@ final class RadioController {
         c.bandwidth = bandwidth
         c.squelchEnabled = squelchEnabled
         c.squelchLevel = Float(squelchLevel)
+        c.squelchAuto = squelchAuto
         c.agcMode = agcMode
         c.afGainDB = Float(afGain)
         // Perceptual volume curve.
@@ -465,6 +472,8 @@ final class RadioController {
         signalDB = level > signalDB ? signalDB + (level - signalDB) * 0.6 : signalDB + (level - signalDB) * 0.12
         signalPeakDB = max(signalPeakDB - 0.25, signalDB)
         if squelchOpen != s.squelchOpen { squelchOpen = s.squelchOpen }
+        let snr = s.snrDB.map { Double($0.rounded()) }
+        if snrDB != snr { snrDB = snr }
         if stereoLocked != s.stereoLocked { stereoLocked = s.stereoLocked }
         if overload != s.overload { overload = s.overload }
         meterTick &+= 1
@@ -599,6 +608,7 @@ final class RadioController {
         volume = s.volume
         squelchEnabled = s.squelchEnabled
         squelchLevel = s.squelchLevel
+        squelchAuto = s.squelchAuto
         agcMode = s.agcMode
         afGain = s.afGain
         deemphasis = s.deemphasis
@@ -652,6 +662,7 @@ final class RadioController {
         s.volume = volume
         s.squelchEnabled = squelchEnabled
         s.squelchLevel = squelchLevel
+        s.squelchAuto = squelchAuto
         s.agcMode = agcMode
         s.afGain = afGain
         s.deemphasis = deemphasis

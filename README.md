@@ -20,7 +20,7 @@ demo generator with FM broadcast, AM, NFM, SSB and CW signals, so everything als
 
 **Receiver:** AM, NFM, WFM (stereo with a 19 kHz pilot PLL, 50/75 µs de-emphasis), USB, LSB, CW (adjustable
 pitch) and DSB. Adjustable bandwidth (presets or by dragging the filter edges), tuning step, AGC
-(off/fast/medium/slow) or manual AF gain, squelch with hysteresis, volume/mute.
+(off/fast/medium/slow) or manual AF gain, squelch with hysteresis (level, or auto on carrier-to-noise ratio in FM modes), volume/mute.
 
 **RDS (WFM):** programme service name, PI code, programme type, TP/TA, RadioText and clock time, with
 error correction of short bursts. Shown as a panel over the spectrum; new favourites are named after the station.

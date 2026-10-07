@@ -27,7 +27,7 @@ struct SMeterView: View {
     var body: some View {
         let dbm = radio.signalDBm
         let peakDBm = radio.signalPeakDB - radio.gainDB + radio.meterCalibration
-        let squelchDBm: Double? = radio.squelchEnabled ? radio.squelchLevel - radio.gainDB + radio.meterCalibration : nil
+        let squelchDBm: Double? = radio.squelchEnabled && !radio.autoSquelchActive ? radio.squelchLevel - radio.gainDB + radio.meterCalibration : nil
 
         HStack(spacing: 10) {
             VStack(alignment: .trailing, spacing: 1) {
