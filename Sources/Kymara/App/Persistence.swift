@@ -48,6 +48,7 @@ struct RadioSettings: Codable {
     var afGain: Double = 20
     var deemphasis: Deemphasis = .eu
     var stereo = true
+    var rds = true
     var cwPitch: Double = 700
     var dcCorrection = true
     var swapIQ = false
@@ -101,6 +102,7 @@ extension RadioSettings {
         read(.afGain, &afGain)
         read(.deemphasis, &deemphasis)
         read(.stereo, &stereo)
+        read(.rds, &rds)
         read(.cwPitch, &cwPitch)
         read(.dcCorrection, &dcCorrection)
         read(.swapIQ, &swapIQ)

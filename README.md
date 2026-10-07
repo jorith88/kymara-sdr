@@ -22,6 +22,9 @@ demo generator with FM broadcast, AM, NFM, SSB and CW signals, so everything als
 pitch) and DSB. Adjustable bandwidth (presets or by dragging the filter edges), tuning step, AGC
 (off/fast/medium/slow) or manual AF gain, squelch with hysteresis, volume/mute.
 
+**RDS (WFM):** programme service name, PI code, programme type, TP/TA, RadioText and clock time, with
+error correction of short bursts. Shown in a bar above the spectrum; new favourites are named after the station.
+
 **RF/tuner:** sample rate 0.25–3.2 MS/s, RF gain or tuner AGC, RTL AGC, PPM correction, direct sampling (HF),
 bias-T, offset tuning, DC correction, I/Q swap, overload indicator.
 
@@ -58,7 +61,7 @@ Shortcuts: ⌘R start/stop, ⌘1–7 modes, ⌘D add favourite, ⌘=/⌘−/⌘0
 ## Architecture
 
 - `Sources/SDRCore` — sources (librtlsdr via `dlopen`, rtl_tcp, file, demo), DSP chain
-  (NCO → decimation to ~240 kHz → channel filter (overlap-save FFT) → demodulation → ~48 kHz audio),
+  (NCO → decimation to ~240 kHz → channel filter (overlap-save FFT) → demodulation → ~48 kHz audio, plus the RDS decoder on the FM multiplex),
   spectrum analysis, audio output (AVAudioEngine) and recording.
 - `Sources/Kymara` — SwiftUI app, `RadioController` (state and settings), Metal renderers, persistence.
 

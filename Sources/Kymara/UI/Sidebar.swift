@@ -163,6 +163,16 @@ struct ReceiverPanel: View {
                         Text("pilot locked").font(.caption2).foregroundStyle(Theme.green)
                     }
                 }
+                Row("RDS") {
+                    Toggle("", isOn: $radio.rdsEnabled)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                    if radio.rds.synced {
+                        Text(radio.rds.trimmedProgramService.isEmpty ? "synchronised" : radio.rds.trimmedProgramService)
+                            .font(.caption2)
+                            .foregroundStyle(Theme.green)
+                    }
+                }
             }
 
             if radio.mode == .cw {

@@ -17,11 +17,19 @@ public final class DemoSource: IQSource, @unchecked Sendable {
         case lsb
     }
 
+    struct StationData {
+        let pi: UInt16
+        let ps: String
+        let radioText: String
+        let pty: Int
+    }
+
     struct Emitter {
         let frequency: Double
         let kind: Kind
         let level: Float
         let seed: Double
+        var rds: StationData? = nil
     }
 
     static let emitters: [Emitter] = [
@@ -32,11 +40,13 @@ public final class DemoSource: IQSource, @unchecked Sendable {
         Emitter(frequency: 99_300_000, kind: .wfm(stereo: false), level: 0.05, seed: 0.7),
         Emitter(frequency: 99_500_000, kind: .usb, level: 0.03, seed: 0.1),
         Emitter(frequency: 99_650_000, kind: .nfm, level: 0.04, seed: 1.7),
-        Emitter(frequency: 100_000_000, kind: .wfm(stereo: true), level: 0.35, seed: 0),
+        Emitter(frequency: 100_000_000, kind: .wfm(stereo: true), level: 0.35, seed: 0,
+                rds: StationData(pi: 0x8201, ps: "KYMARA", radioText: "Kymara demo FM - native macOS SDR receiver", pty: 10)),
         Emitter(frequency: 100_350_000, kind: .am, level: 0.08, seed: 0.9),
         Emitter(frequency: 100_450_000, kind: .cw, level: 0.03, seed: 0.4),
         Emitter(frequency: 100_700_000, kind: .wfm(stereo: false), level: 0.12, seed: 2.5),
-        Emitter(frequency: 101_200_000, kind: .wfm(stereo: true), level: 0.2, seed: 1.1),
+        Emitter(frequency: 101_200_000, kind: .wfm(stereo: true), level: 0.2, seed: 1.1,
+                rds: StationData(pi: 0x8202, ps: "DEMO 2", radioText: "Second demo station with RDS", pty: 24)),
         Emitter(frequency: 124_000_000, kind: .am, level: 0.06, seed: 1.3),
         Emitter(frequency: 124_325_000, kind: .am, level: 0.03, seed: 2.2),
         Emitter(frequency: 145_500_000, kind: .nfm, level: 0.06, seed: 0.2),
@@ -165,6 +175,10 @@ private final class Generator {
     private var tone2: [Rotator]
     private var pilot: Rotator
     private let morse: [Bool]
+    /// Per emitter: differentially encoded RDS bits as ±1, and the position in that stream (in bits).
+    private let rdsSymbols: [[Float]]
+    private var rdsPosition: [Double]
+    private let biphaseShape: [Float] = (0..<256).map { Float(sin(2 * Double.pi * Double($0) / 256)) }
 
     init(sampleRate: Double) {
         fs = sampleRate
@@ -175,6 +189,11 @@ private final class Generator {
         tone2 = DemoSource.emitters.enumerated().map { i, _ in Rotator(frequency: 1100 + Double(i) * 37, sampleRate: sampleRate) }
         pilot = Rotator(frequency: 19_000, sampleRate: sampleRate)
         morse = Generator.morsePattern("CQ CQ DE PA0SDR PA0SDR K   ")
+        rdsSymbols = DemoSource.emitters.map { e in
+            guard let r = e.rds else { return [] }
+            return RDSEncoder.bitstream(pi: r.pi, ps: r.ps, radioText: r.radioText, pty: r.pty).map { $0 ? 1 : -1 }
+        }
+        rdsPosition = DemoSource.emitters.map { $0.seed * 1000 }
 
         let noiseCount = 1 << 18
         noiseI = [Float](repeating: 0, count: noiseCount)
@@ -258,6 +277,9 @@ private final class Generator {
                 // Alternating tones per channel so stereo separation is audible.
                 let leftOn = sin(2 * .pi * tBlock / 4) > 0
                 let k = 2 * .pi * 75_000 * dt
+                let symbols = rdsSymbols[e]
+                var rdsPos = rdsPosition[e]
+                let rdsStep = RDS.bitRate * dt
                 for i in 0..<n {
                     let left = leftOn ? 0.8 * t1.sinValue : 0.15 * t2.sinValue
                     let right = leftOn ? 0.15 * t1.sinValue : 0.8 * t2.sinValue
@@ -266,6 +288,14 @@ private final class Generator {
                         let s19 = p19.sinValue
                         let s38 = 2 * s19 * p19.cosValue
                         mpx = 0.45 * (left + right) + 0.45 * (left - right) * s38 + 0.1 * s19
+                        if !symbols.isEmpty {
+                            // Biphase symbol on a 57 kHz carrier locked to the pilot (sin 3θ).
+                            let bit = Int(rdsPos)
+                            let shape = biphaseShape[Int((rdsPos - Double(bit)) * 256) & 255]
+                            let s57 = s19 * (3 - 4 * s19 * s19)
+                            mpx += 0.05 * Double(symbols[bit % symbols.count] * shape) * s57
+                            rdsPos += rdsStep
+                        }
                     } else {
                         mpx = 0.5 * (left + right)
                     }
@@ -274,6 +304,7 @@ private final class Generator {
                     ampF[i] = Float(level)
                     t1.advance(); t2.advance(); p19.advance()
                 }
+                rdsPosition[e] = rdsPos.truncatingRemainder(dividingBy: Double(max(symbols.count, 1)))
             case .nfm:
                 let on = sin(2 * .pi * tBlock / 7 + emitter.seed) > -0.2
                 let target = on ? 1.0 : 0.0

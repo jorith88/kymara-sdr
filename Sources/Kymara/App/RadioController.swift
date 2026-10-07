@@ -55,7 +55,9 @@ final class RadioController {
     let libraryPath: String? = RTLSDRSource.libraryPath
 
     // MARK: Tuning
-    private(set) var vfoFrequency: Double = 100_000_000
+    private(set) var vfoFrequency: Double = 100_000_000 {
+        didSet { if vfoFrequency != oldValue { clearRDS() } }
+    }
     private(set) var centerFrequency: Double = 99_700_000
     var mode: DemodMode = .wfm { didSet { if mode != oldValue { modeChanged(from: oldValue) } } }
     var bandwidth: Double = 180_000 { didSet { bandwidths[mode.rawValue] = bandwidth; pushConfig() } }
@@ -85,6 +87,7 @@ final class RadioController {
     var afGain: Double = 20 { didSet { pushConfig() } }
     var deemphasis: Deemphasis = .eu { didSet { pushConfig() } }
     var stereoEnabled = true { didSet { pushConfig() } }
+    var rdsEnabled = true { didSet { pushConfig() } }
     var cwPitch: Double = 700 { didSet { pushConfig() } }
 
     // MARK: Display
@@ -113,6 +116,7 @@ final class RadioController {
     private(set) var signalPeakDB: Double = -150
     private(set) var squelchOpen = false
     private(set) var stereoLocked = false
+    private(set) var rds = RDSInfo()
     private(set) var overload = false
     private(set) var audioLatency: Double = 0
     private(set) var measuredRate: Double = 0
@@ -265,6 +269,7 @@ final class RadioController {
         stopSource()
         audioOut.stop()
         isRunning = false
+        clearRDS()
         sourceName = "Not running"
         signalDB = -150
     }
@@ -357,7 +362,13 @@ final class RadioController {
         bandwidth = min(max(bw, r.lowerBound), maxBandwidth).rounded()
     }
 
+    private func clearRDS() {
+        engine.resetRDS()
+        if rds != RDSInfo() { rds = RDSInfo() }
+    }
+
     private func modeChanged(from old: DemodMode) {
+        clearRDS()
         bandwidths[old.rawValue] = bandwidth
         steps[old.rawValue] = step
         let bw = bandwidths[mode.rawValue] ?? mode.defaultBandwidth
@@ -433,6 +444,7 @@ final class RadioController {
         c.muted = muted
         c.deemphasis = deemphasis.tau
         c.stereo = stereoEnabled
+        c.rds = rdsEnabled
         c.cwPitch = cwPitch
         c.dcCorrection = dcCorrection
         c.swapIQ = swapIQ
@@ -455,6 +467,7 @@ final class RadioController {
         if stereoLocked != s.stereoLocked { stereoLocked = s.stereoLocked }
         if overload != s.overload { overload = s.overload }
         meterTick &+= 1
+        if meterTick % 5 == 0, s.rds != rds { rds = s.rds }
         if meterTick % 15 == 0 {
             audioLatency = engine.audioRing.latency
             measuredRate = s.samplesPerSecond
@@ -523,7 +536,9 @@ final class RadioController {
     // MARK: - Bookmarks
 
     func addBookmark(name: String? = nil, group: String = "General") {
-        let label = name ?? String(format: "%.4f MHz %@", vfoFrequency / 1e6, mode.rawValue)
+        let stationName = mode == .wfm && rds.hasData ? rds.trimmedProgramService : ""
+        let label = name ?? (stationName.isEmpty ? String(format: "%.4f MHz %@", vfoFrequency / 1e6, mode.rawValue)
+                                                 : String(format: "%@ %.1f", stationName, vfoFrequency / 1e6))
         bookmarks.append(Bookmark(name: label, frequency: vfoFrequency, mode: mode, bandwidth: bandwidth, group: group))
     }
 
@@ -587,6 +602,7 @@ final class RadioController {
         afGain = s.afGain
         deemphasis = s.deemphasis
         stereoEnabled = s.stereo
+        rdsEnabled = s.rds
         cwPitch = s.cwPitch
         dcCorrection = s.dcCorrection
         swapIQ = s.swapIQ
@@ -638,6 +654,7 @@ final class RadioController {
         s.afGain = afGain
         s.deemphasis = deemphasis
         s.stereo = stereoEnabled
+        s.rds = rdsEnabled
         s.cwPitch = cwPitch
         s.dcCorrection = dcCorrection
         s.swapIQ = swapIQ
