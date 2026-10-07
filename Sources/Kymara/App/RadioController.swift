@@ -25,59 +25,6 @@ enum Deemphasis: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-struct Bookmark: Identifiable, Codable, Hashable {
-    var id = UUID()
-    var name: String
-    var frequency: Double
-    var mode: DemodMode
-    var bandwidth: Double
-    var group: String = "General"
-}
-
-/// Persisted user settings.
-struct RadioSettings: Codable {
-    var sourceKind: SourceKind = .demo
-    var tcpHost = "127.0.0.1"
-    var tcpPort = 1234
-    var vfo: Double = 100_000_000
-    var center: Double = 99_700_000
-    var mode: DemodMode = .wfm
-    var bandwidths: [String: Double] = [:]
-    var steps: [String: Double] = [:]
-    var sampleRate: Double = 2_400_000
-    var gainAuto = false
-    var gain = 297
-    var ppm = 0
-    var rtlAGC = false
-    var directSampling = 0
-    var biasTee = false
-    var offsetTuning = false
-    var volume: Double = 0.5
-    var squelchEnabled = false
-    var squelchLevel: Double = -50
-    var agcMode: AGCMode = .medium
-    var afGain: Double = 20
-    var deemphasis: Deemphasis = .eu
-    var stereo = true
-    var cwPitch: Double = 700
-    var dcCorrection = true
-    var swapIQ = false
-    var fftSize = 16384
-    var averaging: Double = 0.5
-    var spectrumTop: Double = -10
-    var spectrumBottom: Double = -110
-    var waterfallMin: Double = -95
-    var waterfallMax: Double = -35
-    var palette: WaterfallPalette = .classic
-    var waterfallSpeed: Double = 30
-    var spectrumRate: Double = 40
-    var peakHold = false
-    var fillSpectrum = true
-    var meterCalibration: Double = -10
-    var showBookmarks = true
-    var theme: AppTheme? = nil
-    var bookmarks: [Bookmark]? = nil
-}
 
 @MainActor
 @Observable
@@ -605,14 +552,13 @@ final class RadioController {
 
     // MARK: - Persistence
 
-    private static let settingsKey = "RadioSettings.v1"
-
     private func load() {
-        var s = RadioSettings()
-        if let data = UserDefaults.standard.data(forKey: Self.settingsKey),
-           let decoded = try? JSONDecoder().decode(RadioSettings.self, from: data) {
-            s = decoded
+        let store = SettingsStore()
+        var s: RadioSettings
+        if let loaded = store.loadSettings() {
+            s = loaded
         } else {
+            s = RadioSettings()
             needsInitialAutoRange = true
             s.sourceKind = RTLSDRSource.listDevices().isEmpty ? .demo : .rtlsdr
         }
@@ -659,7 +605,7 @@ final class RadioController {
         showBookmarks = s.showBookmarks
         theme = s.theme ?? .system
         theme.apply()
-        bookmarks = s.bookmarks ?? Self.defaultBookmarks
+        bookmarks = store.loadBookmarks(legacy: s.bookmarks) ?? Self.defaultBookmarks
         if abs(vfoFrequency - centerFrequency) > sampleRate * 0.48 { centerFrequency = vfoFrequency - sampleRate / 8 }
     }
 
@@ -709,7 +655,6 @@ final class RadioController {
         s.meterCalibration = meterCalibration
         s.showBookmarks = showBookmarks
         s.theme = theme
-        s.bookmarks = bookmarks
         return s
     }
 
@@ -724,8 +669,8 @@ final class RadioController {
     }
 
     func saveNow() {
-        if let data = try? JSONEncoder().encode(currentSettings()) {
-            UserDefaults.standard.set(data, forKey: Self.settingsKey)
-        }
+        let store = SettingsStore()
+        store.saveSettings(currentSettings())
+        store.saveBookmarks(bookmarks)
     }
 }
