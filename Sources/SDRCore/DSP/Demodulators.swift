@@ -307,6 +307,83 @@ public struct Deemphasis {
     }
 }
 
+/// Second-order IIR section (RBJ cookbook), direct form I.
+public struct Biquad {
+    private var b0: Float = 1, b1: Float = 0, b2: Float = 0, a1: Float = 0, a2: Float = 0
+    private var x1: Float = 0, x2: Float = 0, y1: Float = 0, y2: Float = 0
+
+    public static func lowpass(cutoff: Double, sampleRate: Double, q: Double = 0.7071) -> Biquad {
+        let w = 2 * .pi * cutoff / sampleRate, c = cos(w)
+        return Biquad(b: [(1 - c) / 2, 1 - c, (1 - c) / 2], w: w, q: q)
+    }
+
+    public static func highpass(cutoff: Double, sampleRate: Double, q: Double = 0.7071) -> Biquad {
+        let w = 2 * .pi * cutoff / sampleRate, c = cos(w)
+        return Biquad(b: [(1 + c) / 2, -(1 + c), (1 + c) / 2], w: w, q: q)
+    }
+
+    private init(b: [Double], w: Double, q: Double) {
+        let alpha = sin(w) / (2 * q)
+        let a0 = 1 + alpha
+        b0 = Float(b[0] / a0)
+        b1 = Float(b[1] / a0)
+        b2 = Float(b[2] / a0)
+        a1 = Float(-2 * cos(w) / a0)
+        a2 = Float((1 - alpha) / a0)
+    }
+
+    public mutating func process(_ p: UnsafeMutablePointer<Float>, count: Int) {
+        var xa = x1, xb = x2, ya = y1, yb = y2
+        for k in 0..<count {
+            let x = p[k]
+            let y = b0 * x + b1 * xa + b2 * xb - a1 * ya - a2 * yb
+            xb = xa
+            xa = x
+            yb = ya
+            ya = y
+            p[k] = y
+        }
+        x1 = xa
+        x2 = xb
+        y1 = ya
+        y2 = yb
+    }
+}
+
+/// Audio chain after the NFM discriminator: de-emphasis matching the transmitter's 6 dB/octave
+/// pre-emphasis (530 µs, 0 dB at 1 kHz), a 300 Hz high-pass that removes DC and CTCSS tones, a 3.5 kHz
+/// low-pass that removes hiss above the speech band, and a soft-knee limiter for over-deviation.
+public struct NFMAudio {
+    private var deemphasis: Deemphasis
+    private let deemphasisGain: Float
+    private var filters: [Biquad]
+
+    public init(sampleRate: Double) {
+        let tau = 530e-6
+        deemphasis = Deemphasis(tau: tau, sampleRate: sampleRate)
+        let corner = 1 / (2 * .pi * tau)
+        deemphasisGain = Float(sqrt(1 + pow(1_000 / corner, 2)))
+        filters = [
+            .highpass(cutoff: 300, sampleRate: sampleRate, q: 0.5412),
+            .highpass(cutoff: 300, sampleRate: sampleRate, q: 1.3066),
+            .lowpass(cutoff: 3_500, sampleRate: sampleRate, q: 0.5412),
+            .lowpass(cutoff: 3_500, sampleRate: sampleRate, q: 1.3066),
+        ]
+    }
+
+    public mutating func process(_ p: UnsafeMutablePointer<Float>, count: Int) {
+        deemphasis.process(p, count: count)
+        var g = deemphasisGain
+        vDSP_vsmul(p, 1, &g, p, 1, vDSP_Length(count))
+        for i in filters.indices { filters[i].process(p, count: count) }
+        let knee: Float = 0.8, room: Float = 1 - knee
+        for k in 0..<count {
+            let a = abs(p[k])
+            if a > knee { p[k] = copysignf(knee + room * tanhf((a - knee) / room), p[k]) }
+        }
+    }
+}
+
 /// Peak-tracking AGC with hang, for AM/SSB/CW.
 public final class AGC {
     public let sampleRate: Double
