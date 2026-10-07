@@ -30,7 +30,7 @@ struct SourcePanel: View {
     var body: some View {
         @Bindable var radio = radio
         Panel("Source", systemImage: "antenna.radiowaves.left.and.right") {
-            Picker("", selection: $radio.sourceKind) {
+            Picker("Source", selection: $radio.sourceKind) {
                 ForEach(SourceKind.allCases) { Text($0.rawValue).tag($0) }
             }
             .labelsHidden()
@@ -44,7 +44,7 @@ struct SourcePanel: View {
                         .foregroundStyle(Theme.amber)
                 }
                 HStack {
-                    Picker("", selection: $radio.selectedDevice) {
+                    Picker("Device", selection: $radio.selectedDevice) {
                         if radio.rtlDevices.isEmpty {
                             Text("No device found").tag(UInt32(0))
                         }
@@ -55,7 +55,8 @@ struct SourcePanel: View {
                     Button {
                         radio.refreshDevices()
                     } label: {
-                        Image(systemName: "arrow.clockwise")
+                        Label("Rescan devices", systemImage: "arrow.clockwise")
+                            .labelStyle(.iconOnly)
                     }
                     .controlSize(.small)
                     .help("Rescan USB devices")
@@ -116,10 +117,11 @@ struct ReceiverPanel: View {
     var body: some View {
         @Bindable var radio = radio
         Panel("Receiver", systemImage: "dial.medium") {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: 4), spacing: 3) {
-                ForEach(DemodMode.allCases) { m in
-                    ChipButton(title: m.rawValue, selected: radio.mode == m) { radio.mode = m }
+            Row("Mode") {
+                Picker("Mode", selection: $radio.mode) {
+                    ForEach(DemodMode.allCases) { Text($0.rawValue).tag($0) }
                 }
+                .labelsHidden()
             }
 
             ValueSlider(label: "Bandwidth",
@@ -128,7 +130,7 @@ struct ReceiverPanel: View {
                         format: hz)
 
             Row("Step") {
-                Picker("", selection: $radio.step) {
+                Picker("Tuning step", selection: $radio.step) {
                     ForEach(RadioController.steps, id: \.self) { Text(hz($0)).tag($0) }
                 }
                 .labelsHidden()
@@ -136,7 +138,7 @@ struct ReceiverPanel: View {
 
             if radio.mode != .wfm && radio.mode != .nfm {
                 Row("AGC") {
-                    Picker("", selection: $radio.agcMode) {
+                    Picker("AGC", selection: $radio.agcMode) {
                         ForEach(AGCMode.allCases) { Text($0.rawValue).tag($0) }
                     }
                     .pickerStyle(.segmented)
@@ -149,14 +151,14 @@ struct ReceiverPanel: View {
 
             if radio.mode == .wfm {
                 Row("De-emphasis") {
-                    Picker("", selection: $radio.deemphasis) {
+                    Picker("De-emphasis", selection: $radio.deemphasis) {
                         ForEach(Deemphasis.allCases) { Text($0.rawValue).tag($0) }
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
                 }
                 Row("Stereo") {
-                    Toggle("", isOn: $radio.stereoEnabled)
+                    Toggle("Stereo", isOn: $radio.stereoEnabled)
                         .labelsHidden()
                         .toggleStyle(.switch)
                     if radio.stereoLocked {
@@ -164,7 +166,7 @@ struct ReceiverPanel: View {
                     }
                 }
                 Row("RDS") {
-                    Toggle("", isOn: $radio.rdsEnabled)
+                    Toggle("RDS", isOn: $radio.rdsEnabled)
                         .labelsHidden()
                         .toggleStyle(.switch)
                     if radio.rds.synced {
@@ -174,7 +176,7 @@ struct ReceiverPanel: View {
                     }
                 }
                 Row("RDS panel") {
-                    Toggle("", isOn: $radio.showRDSPanel)
+                    Toggle("RDS panel", isOn: $radio.showRDSPanel)
                         .labelsHidden()
                         .toggleStyle(.switch)
                         .disabled(!radio.rdsEnabled)
@@ -186,16 +188,18 @@ struct ReceiverPanel: View {
             }
 
             Row("Squelch") {
-                Toggle("", isOn: $radio.squelchEnabled)
+                Toggle("Squelch", isOn: $radio.squelchEnabled)
                     .labelsHidden()
                     .toggleStyle(.switch)
                 Circle()
                     .fill(radio.squelchOpen ? Theme.green : Theme.red.opacity(0.6))
                     .frame(width: 8, height: 8)
+                    .accessibilityLabel(radio.squelchOpen ? "Squelch open" : "Squelch closed")
+                    .help(radio.squelchOpen ? "Squelch open" : "Squelch closed")
             }
             if radio.mode == .nfm || radio.mode == .wfm {
                 Row("Auto (FM)") {
-                    Toggle("", isOn: $radio.squelchAuto)
+                    Toggle("Auto squelch", isOn: $radio.squelchAuto)
                         .labelsHidden()
                         .toggleStyle(.switch)
                         .disabled(!radio.squelchEnabled)
@@ -203,7 +207,7 @@ struct ReceiverPanel: View {
                     if let snr = radio.snrDB {
                         // Padded and monospaced so the row does not resize as the value changes.
                         Text(String(format: "SNR %3.0f dB", snr))
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(.caption.monospaced())
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -222,7 +226,7 @@ struct TunerPanel: View {
         @Bindable var radio = radio
         Panel("RF / Tuner", systemImage: "cpu") {
             Row("Sample rate") {
-                Picker("", selection: $radio.sampleRate) {
+                Picker("Sample rate", selection: $radio.sampleRate) {
                     ForEach(RadioController.sampleRates, id: \.self) { Text(String(format: "%.3f MS/s", $0 / 1e6)).tag($0) }
                     if !RadioController.sampleRates.contains(radio.sampleRate) {
                         Text(String(format: "%.3f MS/s", radio.sampleRate / 1e6)).tag(radio.sampleRate)
@@ -233,7 +237,7 @@ struct TunerPanel: View {
             }
 
             Row("Tuner AGC") {
-                Toggle("", isOn: $radio.gainAuto)
+                Toggle("Tuner AGC", isOn: $radio.gainAuto)
                     .labelsHidden()
                     .toggleStyle(.switch)
             }
@@ -246,7 +250,7 @@ struct TunerPanel: View {
                             format: { _ in String(format: "%.1f dB", Double(radio.gain) / 10) })
             }
             Row("RTL AGC") {
-                Toggle("", isOn: $radio.rtlAGC)
+                Toggle("RTL AGC", isOn: $radio.rtlAGC)
                     .labelsHidden()
                     .toggleStyle(.switch)
                     .help("RTL2832U digital AGC")
@@ -254,12 +258,12 @@ struct TunerPanel: View {
             Row("PPM") {
                 Stepper(value: $radio.ppm, in: -200...200) {
                     Text("\(radio.ppm)")
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.subheadline.monospaced())
                         .frame(width: 36, alignment: .trailing)
                 }
             }
             Row("Direct samp.") {
-                Picker("", selection: $radio.directSampling) {
+                Picker("Direct sampling", selection: $radio.directSampling) {
                     Text("Off").tag(0)
                     Text("I").tag(1)
                     Text("Q (HF)").tag(2)
@@ -269,24 +273,24 @@ struct TunerPanel: View {
                 .help("Direct sampling for HF below 24 MHz (RTL-SDR Blog V3: Q branch)")
             }
             Row("Bias-T") {
-                Toggle("", isOn: $radio.biasTee)
+                Toggle("Bias-T", isOn: $radio.biasTee)
                     .labelsHidden()
                     .toggleStyle(.switch)
                     .help("Powers an LNA through the coax. Only use with compatible hardware.")
                 Spacer()
-                Text("Offset").font(.system(size: 11)).foregroundStyle(Theme.dim)
-                Toggle("", isOn: $radio.offsetTuning)
+                Text("Offset").font(.subheadline).foregroundStyle(.secondary).accessibilityHidden(true)
+                Toggle("Offset tuning", isOn: $radio.offsetTuning)
                     .labelsHidden()
                     .toggleStyle(.switch)
                     .help("Offset tuning (E4000 tuners)")
             }
             Row("DC removal") {
-                Toggle("", isOn: $radio.dcCorrection)
+                Toggle("DC removal", isOn: $radio.dcCorrection)
                     .labelsHidden()
                     .toggleStyle(.switch)
                 Spacer()
-                Text("Swap I/Q").font(.system(size: 11)).foregroundStyle(Theme.dim)
-                Toggle("", isOn: $radio.swapIQ)
+                Text("Swap I/Q").font(.subheadline).foregroundStyle(.secondary).accessibilityHidden(true)
+                Toggle("Swap I/Q", isOn: $radio.swapIQ)
                     .labelsHidden()
                     .toggleStyle(.switch)
             }
@@ -303,23 +307,8 @@ struct DisplayPanel: View {
     var body: some View {
         @Bindable var radio = radio
         Panel("Display", systemImage: "waveform.path.ecg.rectangle") {
-            Row("Theme") {
-                Picker("", selection: $radio.theme) {
-                    ForEach(AppTheme.allCases) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-            }
-            Row("Displays") {
-                Picker("", selection: $radio.displayTheme) {
-                    ForEach(DisplayTheme.allCases) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .help("Theme of the spectrum and waterfall; Auto follows the app theme")
-            }
             Row("FFT size") {
-                Picker("", selection: $radio.fftSize) {
+                Picker("FFT size", selection: $radio.fftSize) {
                     ForEach(SpectrumAnalyzer.sizes, id: \.self) { Text("\($0)").tag($0) }
                 }
                 .labelsHidden()
@@ -330,8 +319,9 @@ struct DisplayPanel: View {
             ValueSlider(label: "Averaging", value: $radio.averaging, range: 0...0.95, format: { String(format: "%.0f %%", $0 * 100) })
             ValueSlider(label: "Frame rate", value: $radio.spectrumRate, range: 10...60, step: 5, format: { String(format: "%.0f fps", $0) })
 
-            Divider().opacity(0.4)
-            Text("Spectrum").font(.system(size: 10.5, weight: .semibold)).foregroundStyle(.secondary)
+            Divider()
+            Text("Spectrum").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                .accessibilityAddTraits(.isHeader)
             ValueSlider(label: "Top", value: $radio.spectrumTop, range: -80...20, step: 1, format: { String(format: "%.0f dB", $0) })
             ValueSlider(label: "Bottom", value: $radio.spectrumBottom, range: -160 ... -20, step: 1, format: { String(format: "%.0f dB", $0) })
             Row("Options") {
@@ -339,10 +329,11 @@ struct DisplayPanel: View {
                 Toggle("Peak hold", isOn: $radio.peakHold).toggleStyle(.checkbox)
             }
 
-            Divider().opacity(0.4)
-            Text("Waterfall").font(.system(size: 10.5, weight: .semibold)).foregroundStyle(.secondary)
+            Divider()
+            Text("Waterfall").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                .accessibilityAddTraits(.isHeader)
             Row("Palette") {
-                Picker("", selection: $radio.palette) {
+                Picker("Waterfall palette", selection: $radio.palette) {
                     ForEach(WaterfallPalette.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .labelsHidden()
@@ -374,9 +365,7 @@ struct RecordingPanel: View {
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
-            Button("Open recordings folder") {
-                NSWorkspace.shared.open(RadioController.recordingsFolder)
-            }
+            Button("Show recordings in Finder") { radio.showRecordingsInFinder() }
             .controlSize(.small)
         }
     }

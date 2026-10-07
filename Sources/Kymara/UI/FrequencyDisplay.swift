@@ -9,6 +9,8 @@ final class FrequencyDisplayNSView: NSView {
     var frequency: Double = 0 {
         didSet { if oldValue != frequency { needsDisplay = true } }
     }
+    /// Tuning step used by VoiceOver increment/decrement.
+    var step: Double = 1000
     var onChange: ((Double) -> Void)?
     var onRequestEntry: (() -> Void)?
 
@@ -145,6 +147,31 @@ final class FrequencyDisplayNSView: NSView {
         }
     }
 
+    // MARK: Accessibility: exposed as an adjustable value, stepped by the tuning step.
+
+    override func isAccessibilityElement() -> Bool { true }
+    override func accessibilityRole() -> NSAccessibility.Role? { .incrementor }
+    override func accessibilityLabel() -> String? { "VFO frequency" }
+    override func accessibilityValue() -> Any? { FrequencyFormat.short(frequency) }
+    override func accessibilityHelp() -> String? {
+        "Scroll over a digit to change it. Double-click or type a number to enter a frequency."
+    }
+
+    override func accessibilityPerformIncrement() -> Bool {
+        onChange?(frequency + step)
+        return true
+    }
+
+    override func accessibilityPerformDecrement() -> Bool {
+        onChange?(max(0, frequency - step))
+        return true
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        onRequestEntry?()
+        return true
+    }
+
     override func keyDown(with event: NSEvent) {
         if let ch = event.charactersIgnoringModifiers?.first, ch.isNumber || ch == "." || event.keyCode == 36 {
             onRequestEntry?()
@@ -156,6 +183,7 @@ final class FrequencyDisplayNSView: NSView {
 
 struct FrequencyDisplay: NSViewRepresentable {
     let frequency: Double
+    var step: Double = 1000
     let onChange: (Double) -> Void
     let onRequestEntry: () -> Void
 
@@ -167,6 +195,7 @@ struct FrequencyDisplay: NSViewRepresentable {
 
     func updateNSView(_ v: FrequencyDisplayNSView, context: Context) {
         v.frequency = frequency
+        v.step = step
         v.onChange = onChange
         v.onRequestEntry = onRequestEntry
     }

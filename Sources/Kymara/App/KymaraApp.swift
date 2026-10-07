@@ -44,14 +44,33 @@ struct KymaraApp: App {
         .defaultSize(width: 1560, height: 940)
         .windowToolbarStyle(.unifiedCompact)
         .commands {
+            // Display commands belong in the standard View menu, above Show/Customize Toolbar.
+            CommandGroup(before: .toolbar) {
+                Button("Zoom In") { radio.setZoom(radio.zoom * 2) }
+                    .keyboardShortcut("=", modifiers: [.command])
+                Button("Zoom Out") { radio.setZoom(radio.zoom / 2) }
+                    .keyboardShortcut("-", modifiers: [.command])
+                Button("Actual Size") { radio.resetView() }
+                    .keyboardShortcut("0", modifiers: [.command])
+                Button("Auto Range") { radio.autoRange() }
+                    .keyboardShortcut("0", modifiers: [.command, .option])
+                Divider()
+                Toggle("Show RDS Panel", isOn: $radio.showRDSPanel)
+                    .keyboardShortcut("r", modifiers: [.command, .shift])
+                    .disabled(radio.mode != .wfm || !radio.rdsEnabled)
+                Toggle("Show Favourites", isOn: $radio.showBookmarks)
+                    .keyboardShortcut("b", modifiers: [.command, .option])
+                Divider()
+            }
             CommandMenu("Radio") {
                 Button(radio.isRunning ? "Stop" : "Start") { radio.toggleRunning() }
                     .keyboardShortcut("r")
                 Button("Enter Frequency…") { radio.showFrequencyEntry = true }
                     .keyboardShortcut("f")
                 Divider()
+                // Toggles rather than buttons so the menu shows a checkmark on the current mode.
                 ForEach(Array(DemodMode.allCases.enumerated()), id: \.element) { i, m in
-                    Button(m.rawValue) { radio.mode = m }
+                    Toggle(m.rawValue, isOn: Binding(get: { radio.mode == m }, set: { if $0 { radio.mode = m } }))
                         .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: .command)
                 }
                 Divider()
@@ -59,25 +78,23 @@ struct KymaraApp: App {
                     .keyboardShortcut(.rightArrow, modifiers: [.command])
                 Button("Tune Down") { radio.tuneSteps(-1) }
                     .keyboardShortcut(.leftArrow, modifiers: [.command])
-                Button("Zoom In") { radio.setZoom(radio.zoom * 2) }
-                    .keyboardShortcut("=", modifiers: [.command])
-                Button("Zoom Out") { radio.setZoom(radio.zoom / 2) }
-                    .keyboardShortcut("-", modifiers: [.command])
-                Button("Reset Zoom") { radio.resetView() }
-                    .keyboardShortcut("0", modifiers: [.command])
                 Divider()
-                Toggle("Show RDS Panel", isOn: $radio.showRDSPanel)
-                    .keyboardShortcut("r", modifiers: [.command, .shift])
-                Button("Add Favourite") { radio.addBookmark() }
+                Button("Add to Favourites") { radio.addBookmark() }
                     .keyboardShortcut("d")
-                Button(radio.muted ? "Unmute" : "Mute") { radio.muted.toggle() }
+                Toggle("Mute", isOn: $radio.muted)
                     .keyboardShortcut("m", modifiers: [.command, .shift])
                 Divider()
                 Button(radio.recordingAudio ? "Stop Audio Recording" : "Record Audio") { radio.toggleAudioRecording() }
                     .keyboardShortcut("a", modifiers: [.command, .shift])
                 Button(radio.recordingIQ ? "Stop I/Q Recording" : "Record I/Q") { radio.toggleIQRecording() }
                     .keyboardShortcut("i", modifiers: [.command, .shift])
+                Button("Show Recordings in Finder") { radio.showRecordingsInFinder() }
             }
+        }
+
+        Settings {
+            SettingsView()
+                .environment(radio)
         }
     }
 }

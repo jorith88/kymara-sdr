@@ -17,7 +17,7 @@ struct TopRibbon: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text("VFO A")
-                        .font(.system(size: 9.5, weight: .bold))
+                        .font(.system(size: 10, weight: .bold))
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
                         .background(Theme.accent.opacity(0.25), in: RoundedRectangle(cornerRadius: 3))
@@ -27,21 +27,24 @@ struct TopRibbon: View {
                         .foregroundStyle(.secondary)
                     if radio.stereoLocked {
                         Text("STEREO")
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(Theme.green)
+                            .accessibilityLabel("Stereo")
                     }
                     if radio.overload {
                         Text("OVERLOAD")
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(Theme.red)
                             .help("ADC clipping: lower the RF gain")
+                            .accessibilityLabel("Overload: lower the RF gain")
                     }
                     Spacer(minLength: 0)
                     Text("Hz")
-                        .font(.system(size: 9.5))
+                        .font(.system(size: 10))
                         .foregroundStyle(.tertiary)
                 }
                 FrequencyDisplay(frequency: radio.vfoFrequency,
+                                 step: radio.step,
                                  onChange: { radio.tune(to: $0) },
                                  onRequestEntry: { radio.showFrequencyEntry = true })
                     .frame(width: 330, height: 52)
@@ -50,7 +53,7 @@ struct TopRibbon: View {
                     }
                 HStack(spacing: 4) {
                     Text("LO")
-                        .font(.system(size: 9.5, weight: .bold))
+                        .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(Theme.amber.opacity(0.8))
                     Text(FrequencyFormat.dotted(radio.centerFrequency))
                         .font(.system(size: 11, design: .monospaced))
@@ -60,6 +63,7 @@ struct TopRibbon: View {
                         .foregroundStyle(.tertiary)
                         .padding(.leading, 8)
                 }
+                .accessibilityElement(children: .combine)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -69,17 +73,21 @@ struct TopRibbon: View {
 
             // Mode + bandwidth.
             VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 3) {
-                    ForEach(DemodMode.allCases) { m in
-                        ChipButton(title: m.rawValue, selected: radio.mode == m, width: 34) { radio.mode = m }
-                    }
+                Picker("Mode", selection: $radio.mode) {
+                    ForEach(DemodMode.allCases) { Text($0.rawValue).tag($0) }
                 }
-                HStack(spacing: 3) {
-                    ForEach(radio.mode.bandwidthPresets.filter { $0 <= radio.maxBandwidth }, id: \.self) { bw in
-                        ChipButton(title: FrequencyFormat.compact(bw),
-                                   selected: abs(radio.bandwidth - bw) < 1) { radio.bandwidth = bw }
-                    }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                // A bandwidth that is not a preset (set with the sidebar slider) selects no segment.
+                Picker("Bandwidth", selection: Binding(
+                    get: { presets.first { abs(radio.bandwidth - $0) < 1 } },
+                    set: { if let bw = $0 { radio.bandwidth = bw } }
+                )) {
+                    ForEach(presets, id: \.self) { Text(FrequencyFormat.compact($0)).tag(Optional($0)) }
                 }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
                 HStack(spacing: 6) {
                     Menu {
                         ForEach(RadioController.steps, id: \.self) { s in
@@ -128,6 +136,10 @@ struct TopRibbon: View {
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.border).frame(height: 1) }
     }
 
+    private var presets: [Double] {
+        radio.mode.bandwidthPresets.filter { $0 <= radio.maxBandwidth }
+    }
+
     private var divider: some View {
         Rectangle().fill(Theme.border).frame(width: 1, height: 70)
     }
@@ -151,7 +163,8 @@ struct TopRibbon: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("Start/stop the radio (⌘R)")
+        .help(radio.isRunning ? "Stop the radio (⌘R)" : "Start the radio (⌘R)")
+        .accessibilityLabel(radio.isRunning ? "Stop radio" : "Start radio")
     }
 
     private var audioControls: some View {
@@ -162,12 +175,16 @@ struct TopRibbon: View {
                     radio.muted.toggle()
                 } label: {
                     Image(systemName: radio.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                        .frame(width: 18)
                         .foregroundStyle(radio.muted ? Theme.red : .primary)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .help("Mute")
+                .buttonStyle(.borderless)
+                .help(radio.muted ? "Unmute (⇧⌘M)" : "Mute (⇧⌘M)")
+                .accessibilityLabel(radio.muted ? "Unmute" : "Mute")
                 Slider(value: $radio.volume, in: 0...1)
+                    .accessibilityLabel("Volume")
+                    .accessibilityValue("\(Int(radio.volume * 100)) percent")
                     .frame(width: 120)
                     .controlSize(.small)
             }
@@ -179,6 +196,8 @@ struct TopRibbon: View {
                 .controlSize(.small)
                 .tint(radio.squelchOpen ? Theme.green : Theme.red)
                 .help("Squelch")
+                .accessibilityLabel("Squelch")
+                .accessibilityValue(radio.squelchOpen ? "Open" : "Closed")
                 Toggle(isOn: $radio.squelchAuto) {
                     Text("A").font(.system(size: 10, weight: .bold))
                 }
@@ -186,7 +205,10 @@ struct TopRibbon: View {
                 .controlSize(.small)
                 .disabled(!radio.squelchEnabled || !(radio.mode == .nfm || radio.mode == .wfm))
                 .help("Auto squelch (FM): open on carrier-to-noise ratio")
+                .accessibilityLabel("Auto squelch")
                 Slider(value: $radio.squelchLevel, in: -120...0)
+                    .accessibilityLabel("Squelch level")
+                    .accessibilityValue(String(format: "%.0f dBFS", radio.squelchLevel))
                     .frame(width: 70)
                     .controlSize(.small)
                     .disabled(!radio.squelchEnabled || radio.autoSquelchActive)
@@ -196,8 +218,9 @@ struct TopRibbon: View {
                 Text("Squelch auto · SNR -99 dB").hidden()
                 Text(squelchText)
             }
-            .font(.system(size: 9.5, design: .monospaced))
+            .font(.caption.monospaced())
             .foregroundStyle(.tertiary)
+            .accessibilityHidden(true)
         }
     }
 
@@ -216,8 +239,9 @@ struct TopRibbon: View {
             if let start = radio.recordingStart, radio.recordingAudio || radio.recordingIQ {
                 TimelineView(.periodic(from: .now, by: 1)) { ctx in
                     Text(Duration.seconds(ctx.date.timeIntervalSince(start)).formatted(.time(pattern: .minuteSecond)))
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(.caption.monospaced())
                         .foregroundStyle(Theme.red)
+                        .accessibilityLabel("Recording time")
                 }
             }
         }
@@ -230,14 +254,17 @@ struct TopRibbon: View {
                     .fill(active ? Theme.red : Theme.red.opacity(0.35))
                     .frame(width: 9, height: 9)
                     .shadow(color: active ? Theme.red : .clear, radius: 4)
-                Text(active ? "Stop \(title)" : "Rec \(title)")
-                    .font(.system(size: 10.5, weight: .medium))
+                    .accessibilityHidden(true)
+                Text(active ? "Stop \(title)" : "Record \(title)")
+                    .font(.caption.weight(.medium))
             }
-            .frame(width: 84, alignment: .leading)
+            .frame(width: 96, alignment: .leading)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
             .background(active ? Theme.fillStrong : Theme.fill, in: RoundedRectangle(cornerRadius: 4))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityValue(active ? "Recording" : "")
     }
 }

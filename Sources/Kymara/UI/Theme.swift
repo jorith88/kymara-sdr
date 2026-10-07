@@ -61,23 +61,26 @@ private func adaptive(_ light: NSColor, _ dark: NSColor) -> Color {
     Color(nsColor: .adaptive(light: light, dark: dark))
 }
 
+/// Colours for the app chrome. Everything except the instrument display (`lcd`) maps to an AppKit
+/// semantic colour, so the UI follows the user's accent colour, desktop tinting and Increase Contrast.
 enum Theme {
-    static let window = adaptive(.rgb(0.925, 0.93, 0.94), .rgb(0.085, 0.09, 0.105))
-    static let panel = adaptive(.rgb(0.975, 0.977, 0.982), .rgb(0.12, 0.128, 0.148))
-    static let panelHeader = adaptive(.rgb(0.89, 0.9, 0.915), .rgb(0.155, 0.165, 0.19))
-    static let ribbon = adaptive(.rgb(0.955, 0.958, 0.965), .rgb(0.105, 0.112, 0.13))
-    static let border = adaptive(.rgb(0, 0, 0, 0.12), .rgb(1, 1, 1, 0.08))
-    static let accent = adaptive(.rgb(0.0, 0.47, 0.85), .rgb(0.25, 0.72, 1.0))
+    static let window = Color(nsColor: .windowBackgroundColor)
+    static let panel = Color(nsColor: .controlBackgroundColor)
+    static let panelHeader = Color(nsColor: .quaternarySystemFill)
+    static let ribbon = Color(nsColor: .windowBackgroundColor)
+    static let border = Color(nsColor: .separatorColor)
+    static let accent = Color.accentColor
+    /// Frequency read-out background: a deliberately instrument-like panel.
     static let lcd = adaptive(.rgb(0.86, 0.9, 0.93), .rgb(0.02, 0.03, 0.05))
     static let lcdText = adaptive(.rgb(0.05, 0.12, 0.22), .rgb(0.85, 0.95, 1.0))
-    static let dim = adaptive(.rgb(0, 0, 0, 0.55), .rgb(1, 1, 1, 0.45))
-    static let text = adaptive(.rgb(0, 0, 0, 0.85), .rgb(1, 1, 1, 0.85))
+    static let dim = Color(nsColor: .secondaryLabelColor)
+    static let text = Color(nsColor: .labelColor)
     /// Subtle fill for buttons and chips.
-    static let fill = adaptive(.rgb(0, 0, 0, 0.06), .rgb(1, 1, 1, 0.07))
-    static let fillStrong = adaptive(.rgb(0, 0, 0, 0.12), .rgb(1, 1, 1, 0.12))
-    static let red = adaptive(.rgb(0.85, 0.15, 0.12), .rgb(1, 0.3, 0.25))
-    static let green = adaptive(.rgb(0.1, 0.62, 0.22), .rgb(0.3, 0.9, 0.4))
-    static let amber = adaptive(.rgb(0.8, 0.5, 0.0), .rgb(1, 0.75, 0.2))
+    static let fill = Color(nsColor: .quaternarySystemFill)
+    static let fillStrong = Color(nsColor: .tertiarySystemFill)
+    static let red = Color(nsColor: .systemRed)
+    static let green = Color(nsColor: .systemGreen)
+    static let amber = Color(nsColor: .systemOrange)
 }
 
 /// Collapsible sidebar section in the SDR Console style.
@@ -85,6 +88,7 @@ struct Panel<Content: View>: View {
     let title: String
     let systemImage: String
     @AppStorage private var expanded: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ViewBuilder let content: Content
 
     init(_ title: String, systemImage: String, @ViewBuilder content: () -> Content) {
@@ -97,27 +101,32 @@ struct Panel<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
-                withAnimation(.easeInOut(duration: 0.15)) { expanded.toggle() }
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) { expanded.toggle() }
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: systemImage)
                         .foregroundStyle(Theme.accent)
                         .frame(width: 16)
-                    Text(title.uppercased())
-                        .font(.system(size: 10.5, weight: .semibold))
-                        .tracking(0.8)
+                        .accessibilityHidden(true)
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
                     Spacer()
                     Image(systemName: "chevron.right")
                         .rotationEffect(.degrees(expanded ? 90 : 0))
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(Theme.dim)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                 }
                 .padding(.horizontal, 10)
-                .padding(.vertical, 7)
+                .frame(minHeight: 28)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .background(Theme.panelHeader)
+            .accessibilityLabel(title)
+            .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+            .accessibilityHint(expanded ? "Collapses the section" : "Expands the section")
+            .accessibilityAddTraits(.isHeader)
 
             if expanded {
                 VStack(alignment: .leading, spacing: 8) {
@@ -133,7 +142,8 @@ struct Panel<Content: View>: View {
     }
 }
 
-/// Label + control row.
+/// Label + control row. The label is also given to the control for VoiceOver, so controls inside
+/// can keep their own labels hidden.
 struct Row<Content: View>: View {
     let label: String
     @ViewBuilder let content: Content
@@ -146,12 +156,15 @@ struct Row<Content: View>: View {
     var body: some View {
         HStack(spacing: 8) {
             Text(label)
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.dim)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
                 .frame(width: 78, alignment: .leading)
-            content
+                .accessibilityHidden(true)
+            HStack(spacing: 8) { content }
                 .controlSize(.small)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(label)
         }
     }
 }
@@ -167,45 +180,21 @@ struct ValueSlider: View {
     var body: some View {
         Row(label) {
             HStack(spacing: 6) {
-                if let step {
-                    Slider(value: $value, in: range, step: step)
-                } else {
-                    Slider(value: $value, in: range)
+                Group {
+                    if let step {
+                        Slider(value: $value, in: range, step: step)
+                    } else {
+                        Slider(value: $value, in: range)
+                    }
                 }
+                .accessibilityLabel(label)
+                .accessibilityValue(format(value))
                 Text(format(value))
-                    .font(.system(size: 10.5, design: .monospaced))
+                    .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
                     .frame(width: 58, alignment: .trailing)
+                    .accessibilityHidden(true)
             }
         }
-    }
-}
-
-/// Toggle-style button used for mode selection etc.
-struct ChipButton: View {
-    let title: String
-    let selected: Bool
-    var width: CGFloat? = nil
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 11, weight: selected ? .bold : .medium))
-                .lineLimit(1)
-                .fixedSize()
-                .frame(width: width)
-                .frame(minWidth: 34)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 4)
-                .foregroundStyle(selected ? Color.white : Theme.text)
-                .background(
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(selected ? Theme.accent : Theme.fill)
-                )
-                .overlay(RoundedRectangle(cornerRadius: 4).stroke(selected ? Color.clear : Theme.border))
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 }
