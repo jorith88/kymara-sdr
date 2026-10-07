@@ -101,12 +101,14 @@ public final class DSPEngine: @unchecked Sendable {
     private var notch = AutoNotch(sampleRate: 48_000)
     private var dcBlock = DCBlocker(cutoff: 30, sampleRate: 48_000)
     private var nfmAudio = NFMAudio(sampleRate: 48_000)
+    private var squelchDelay = DelayLine(delay: 0)
     private var deemphL = Deemphasis(tau: 0, sampleRate: 48_000)
     private var deemphR = Deemphasis(tau: 0, sampleRate: 48_000)
     private var dcI: Float = 0
     private var dcQ: Float = 0
     private var squelchOpen = false
     private var squelchHang: Double = 0
+    private var squelchGain: Float = 0
     private var envM2: Double = 0
     private var envM4: Double = 0
     private var snrDB: Float = -20
@@ -187,6 +189,7 @@ public final class DSPEngine: @unchecked Sendable {
             agc = AGC(sampleRate: ra)
             dcBlock = DCBlocker(cutoff: 40, sampleRate: ra)
             nfmAudio = NFMAudio(sampleRate: ra)
+            squelchDelay = DelayLine(delay: c.mode == .nfm ? Int(0.02 * ra) : 0)
             mixer = Mixer()
             cwMixer = Mixer()
             envM2 = 0
@@ -311,7 +314,7 @@ public final class DSPEngine: @unchecked Sendable {
             }
             guard nc > 0 else { return }
             levelDB = channelPower(nc)
-            updateSNR(nc, rate: rates.rate1)
+            updateSNR(from: 0, count: nc, rate: rates.rate1)
             ensure(&demod, nc)
             let gain = Float(rates.rate1 / (2 * .pi * 75_000))
             channel.outRe.withUnsafeBufferPointer { re in
@@ -350,32 +353,37 @@ public final class DSPEngine: @unchecked Sendable {
             }
             guard nc > 0 else { return }
             levelDB = channelPower(nc)
-            if c.mode == .nfm { updateSNR(nc, rate: rates.audioRate) }
             ensure(&left, nc)
             ensure(&right, nc)
             demodulateNarrow(nc, c)
+            if c.mode == .nfm {
+                // Delay the audio, not the squelch decision, so the mute lands before the noise burst
+                // that the SNR estimate takes a few milliseconds to notice.
+                left.withUnsafeBufferPointer { squelchDelay.process($0.baseAddress!, count: nc) }
+                left.withUnsafeMutableBufferPointer { $0.baseAddress!.update(from: squelchDelay.output, count: nc) }
+            }
             audioCount = nc
             right.withUnsafeMutableBufferPointer { r in left.withUnsafeBufferPointer { r.baseAddress!.update(from: $0.baseAddress!, count: nc) } }
         }
 
-        // Squelch with 3 dB hysteresis. Auto (FM): open above 6 dB C/N, close after a short hang below 3 dB.
+        // Squelch. NFM decides every 5 ms (its channel samples run at the audio rate), so the noise burst at
+        // the end of a transmission is cut within a few milliseconds; the rest decide once per block.
+        // Transitions fade over 5 ms to avoid clicks.
         let isFM = c.mode == .wfm || c.mode == .nfm
-        if c.squelchEnabled && c.squelchAuto && isFM {
-            if snrDB > 6 {
-                squelchOpen = true
-                squelchHang = 0.15
-            } else if snrDB < 3 {
-                squelchHang -= Double(audioCount) / rates.audioRate
-                if squelchHang <= 0 { squelchOpen = false }
+        let fadeStep = Float(1 / (0.005 * rates.audioRate))
+        if c.mode == .nfm {
+            let step = max(1, Int(0.005 * rates.audioRate))
+            var start = 0
+            while start < audioCount {
+                let len = min(step, audioCount - start)
+                updateSNR(from: start, count: len, rate: rates.audioRate)
+                let audible = updateSquelch(c, levelDB: levelDB, duration: Double(len) / rates.audioRate)
+                applySquelchGain(from: start, count: len, target: audible ? 1 : 0, step: fadeStep)
+                start += len
             }
-        } else if c.squelchEnabled {
-            squelchOpen = squelchOpen ? levelDB > c.squelchLevel - 3 : levelDB > c.squelchLevel
         } else {
-            squelchOpen = true
-        }
-        if !squelchOpen {
-            left.withUnsafeMutableBufferPointer { $0.baseAddress!.update(repeating: 0, count: audioCount) }
-            right.withUnsafeMutableBufferPointer { $0.baseAddress!.update(repeating: 0, count: audioCount) }
+            let audible = updateSquelch(c, levelDB: levelDB, duration: Double(audioCount) / rates.audioRate)
+            applySquelchGain(from: 0, count: audioCount, target: audible ? 1 : 0, step: fadeStep)
         }
 
         recorder.writeAudio(left: left, right: right, count: audioCount)
@@ -436,12 +444,58 @@ public final class DSPEngine: @unchecked Sendable {
 
     /// Carrier-to-noise estimate from the envelope moments of the channel output (M2M4 estimator).
     /// An FM carrier has a constant envelope, noise a Rayleigh one, so this works at any signal level.
-    private func updateSNR(_ n: Int, rate: Double) {
+    /// Updates `squelchOpen` and returns whether audio should pass. Level squelch: 3 dB hysteresis. Auto (FM):
+    /// open above 6 dB C/N. Below 3 dB the audio mutes at once, while the squelch itself stays open for a short
+    /// hang so a brief fade doesn't close it; audio returns as soon as the signal does.
+    private func updateSquelch(_ c: DSPConfig, levelDB: Float, duration: Double) -> Bool {
+        guard c.squelchEnabled else {
+            squelchOpen = true
+            return true
+        }
+        if c.squelchAuto && (c.mode == .wfm || c.mode == .nfm) {
+            if snrDB > 6 {
+                squelchOpen = true
+                squelchHang = 0.15
+                return true
+            }
+            if snrDB < 3 {
+                squelchHang -= duration
+                if squelchHang <= 0 { squelchOpen = false }
+                return false
+            }
+            return squelchOpen
+        }
+        squelchOpen = squelchOpen ? levelDB > c.squelchLevel - 3 : levelDB > c.squelchLevel
+        return squelchOpen
+    }
+
+    private func applySquelchGain(from start: Int, count: Int, target: Float, step: Float) {
+        var g = squelchGain
+        left.withUnsafeMutableBufferPointer { l in
+            right.withUnsafeMutableBufferPointer { r in
+                if g == target {
+                    if target == 0 {
+                        (l.baseAddress! + start).update(repeating: 0, count: count)
+                        (r.baseAddress! + start).update(repeating: 0, count: count)
+                    }
+                    return
+                }
+                for k in start..<(start + count) {
+                    g = target > g ? min(target, g + step) : max(target, g - step)
+                    l[k] *= g
+                    r[k] *= g
+                }
+            }
+        }
+        squelchGain = g
+    }
+
+    private func updateSNR(from start: Int, count n: Int, rate: Double) {
         ensure(&mags, n)
         channel.outRe.withUnsafeBufferPointer { rp in
             channel.outIm.withUnsafeBufferPointer { ip in
-                var split = DSPSplitComplex(realp: UnsafeMutablePointer(mutating: rp.baseAddress!),
-                                            imagp: UnsafeMutablePointer(mutating: ip.baseAddress!))
+                var split = DSPSplitComplex(realp: UnsafeMutablePointer(mutating: rp.baseAddress! + start),
+                                            imagp: UnsafeMutablePointer(mutating: ip.baseAddress! + start))
                 vDSP_zvmags(&split, 1, &mags, 1, vDSP_Length(n))
             }
         }
