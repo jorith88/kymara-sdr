@@ -19,12 +19,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @main
-struct SDRConsoleApp: App {
+struct KymaraApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var radio = RadioController()
 
     var body: some Scene {
-        Window("Mac SDR Console", id: "main") {
+        Window("Kymara", id: "main") {
             ContentView()
                 .environment(radio)
                 .frame(minWidth: 1180, minHeight: 680)

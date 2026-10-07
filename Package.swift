@@ -2,14 +2,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "SDRConsole",
+    name: "Kymara",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "SDRConsole", targets: ["SDRConsole"]),
+        .executable(name: "Kymara", targets: ["Kymara"]),
     ],
     targets: [
         .target(name: "SDRCore", path: "Sources/SDRCore"),
-        .executableTarget(name: "SDRConsole", dependencies: ["SDRCore"], path: "Sources/SDRConsole"),
+        .executableTarget(name: "Kymara", dependencies: ["SDRCore"], path: "Sources/Kymara"),
         .testTarget(name: "SDRCoreTests", dependencies: ["SDRCore"], path: "Tests/SDRCoreTests"),
     ],
     swiftLanguageModes: [.v5]
