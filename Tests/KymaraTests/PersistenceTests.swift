@@ -4,11 +4,13 @@ import SDRCore
 
 final class PersistenceTests: XCTestCase {
     private var defaults: UserDefaults!
-    private var suite: String!
+    /// One fixed suite: removing a domain empties it but leaves its plist behind,
+    /// so a unique name per test would leave a file in ~/Library/Preferences on every run.
+    private let suite = "KymaraTests"
 
     override func setUp() {
-        suite = "KymaraTests.\(UUID().uuidString)"
         defaults = UserDefaults(suiteName: suite)
+        defaults.removePersistentDomain(forName: suite)
     }
 
     override func tearDown() {
