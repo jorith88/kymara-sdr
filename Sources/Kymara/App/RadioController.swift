@@ -89,6 +89,8 @@ final class RadioController {
     var autoSquelchActive: Bool { squelchEnabled && squelchAuto && (mode == .nfm || mode == .wfm) }
     var agcMode: AGCMode = .medium { didSet { pushConfig() } }
     var afGain: Double = 20 { didSet { pushConfig() } }
+    /// Only applied in modes where `DemodMode.supportsAutoNotch`.
+    var autoNotch = false { didSet { pushConfig() } }
     var deemphasis: Deemphasis = .eu { didSet { pushConfig() } }
     var stereoEnabled = true { didSet { pushConfig() } }
     var rdsEnabled = true { didSet { pushConfig() } }
@@ -450,6 +452,7 @@ final class RadioController {
         c.squelchAuto = squelchAuto
         c.agcMode = agcMode
         c.afGainDB = Float(afGain)
+        c.autoNotch = autoNotch
         // Perceptual volume curve.
         c.volume = Float(volume * volume)
         c.muted = muted
@@ -617,6 +620,7 @@ final class RadioController {
         squelchLevel = s.squelchLevel
         squelchAuto = s.squelchAuto
         agcMode = s.agcMode
+        autoNotch = s.autoNotch
         afGain = s.afGain
         deemphasis = s.deemphasis
         stereoEnabled = s.stereo
@@ -673,6 +677,7 @@ final class RadioController {
         s.squelchLevel = squelchLevel
         s.squelchAuto = squelchAuto
         s.agcMode = agcMode
+        s.autoNotch = autoNotch
         s.afGain = afGain
         s.deemphasis = deemphasis
         s.stereo = stereoEnabled

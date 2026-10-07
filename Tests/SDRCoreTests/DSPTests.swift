@@ -198,6 +198,82 @@ final class DSPTests: XCTestCase {
         XCTAssertLessThan(rms(l2[(l2.count / 2)...]), rms(tail) * 0.1)
     }
 
+    /// Power of the component at `frequency`, by correlation.
+    private func tonePower(_ x: ArraySlice<Float>, frequency: Double, sampleRate: Double) -> Double {
+        var c = 0.0, q = 0.0
+        for (k, v) in zip(x.indices, x) {
+            let ph = 2 * .pi * frequency * Double(k) / sampleRate
+            c += Double(v) * cos(ph)
+            q += Double(v) * sin(ph)
+        }
+        let n = Double(x.count)
+        return 2 * (c * c + q * q) / (n * n)
+    }
+
+    /// Runs the notch over noise plus a tone; returns (tone power out/in, total rms out/in) over the last second.
+    private func notchRun(toneAmplitude: Float, frequency: Double) -> (tone: Double, rms: Float) {
+        let fs = 48_000.0
+        let n = Int(fs * 4)
+        var x = [Float](repeating: 0, count: n)
+        for k in 0..<n {
+            x[k] = Float.random(in: -0.17...0.17) + toneAmplitude * Float(sin(2 * .pi * frequency * Double(k) / fs))
+        }
+        let input = x
+        let notch = AutoNotch(sampleRate: fs)
+        // Irregular block sizes, like the engine delivers.
+        var done = 0
+        while done < n {
+            let m = min(n - done, Int.random(in: 100...3000))
+            x.withUnsafeMutableBufferPointer { notch.process($0.baseAddress! + done, count: m, maxFrequency: 2_800) }
+            done += m
+        }
+        XCTAssertEqual(notch.frequencies.count, 1, "only the tone is notched: \(notch.frequencies)")
+        if let f = notch.frequencies.first { XCTAssertEqual(Double(f), frequency, accuracy: 2) }
+        let tail = (n - Int(fs))..<n
+        return (tonePower(x[tail], frequency: frequency, sampleRate: fs) / tonePower(input[tail], frequency: frequency, sampleRate: fs),
+                rms(x[tail]) / rms(input[tail]))
+    }
+
+    func testAutoNotchRemovesStrongTone() {
+        let r = notchRun(toneAmplitude: 1, frequency: 1_000)
+        XCTAssertLessThan(r.tone, 0.001)
+        XCTAssertEqual(r.rms, 0.1 / 0.71, accuracy: 0.04, "what is left is the noise")
+    }
+
+    func testAutoNotchRemovesWeakTone() {
+        // 0.01 amplitude in 0.1 rms noise: 23 dB below the noise, but about 10 dB above it per FFT bin.
+        // This is what a carrier under an SSB signal looks like.
+        let r = notchRun(toneAmplitude: 0.01, frequency: 753.3)
+        XCTAssertLessThan(r.tone, 0.03)
+        XCTAssertEqual(r.rms, 1, accuracy: 0.02, "the noise passes")
+    }
+
+    func testEngineAutoNotchSuppressesUSBTone() {
+        let fs = 2_400_000.0
+        let vfo = -200_000.0
+        let iq = makeIQ(sampleRate: fs, seconds: 3) { _, t in
+            let ph = 2 * .pi * (vfo + 1_200) * t
+            return (Float(0.05 * cos(ph)), Float(0.05 * sin(ph)))
+        }
+        func output(notch: Bool) -> Float {
+            let engine = DSPEngine()
+            var c = DSPConfig()
+            c.sampleRate = fs
+            c.vfoOffset = vfo
+            c.mode = .usb
+            c.bandwidth = 2_700
+            c.agcMode = .off
+            c.afGainDB = 0
+            c.volume = 1
+            c.autoNotch = notch
+            engine.config = c
+            let (l, _) = runEngine(engine, iq: iq)
+            // The notch starts after one second of averaging.
+            return rms(l[(l.count * 2 / 3)...])
+        }
+        XCTAssertLessThan(output(notch: true), output(notch: false) * 0.1)
+    }
+
     func testEngineAMDemodulation() {
         let fs = 1_024_000.0
         let vfo = 150_000.0

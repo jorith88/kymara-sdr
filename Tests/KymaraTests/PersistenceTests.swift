@@ -28,6 +28,7 @@ final class PersistenceTests: XCTestCase {
         s.palette = .turbo
         s.theme = .light
         s.bandwidths = ["NFM": 12_500]
+        s.autoNotch = true
         store.saveSettings(s)
         let loaded = store.loadSettings()
         XCTAssertEqual(loaded?.vfo, 145_500_000)
@@ -35,6 +36,7 @@ final class PersistenceTests: XCTestCase {
         XCTAssertEqual(loaded?.palette, .turbo)
         XCTAssertEqual(loaded?.theme, .light)
         XCTAssertEqual(loaded?.bandwidths["NFM"], 12_500)
+        XCTAssertEqual(loaded?.autoNotch, true)
     }
 
     func testMissingFieldsKeepTheRest() {

@@ -149,6 +149,15 @@ struct ReceiverPanel: View {
                 }
             }
 
+            if radio.mode.supportsAutoNotch {
+                Row("Auto notch") {
+                    Toggle("Auto notch", isOn: $radio.autoNotch)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .help("Remove carriers and heterodyne whistles from the audio")
+                }
+            }
+
             if radio.mode == .wfm {
                 Row("De-emphasis") {
                     Picker("De-emphasis", selection: $radio.deemphasis) {

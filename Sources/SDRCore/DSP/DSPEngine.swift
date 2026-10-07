@@ -14,6 +14,8 @@ public struct DSPConfig: Equatable, Sendable {
     public var squelchAuto = false
     public var agcMode: AGCMode = .medium
     public var afGainDB: Float = 20
+    /// Remove steady tones from the audio (modes where `DemodMode.supportsAutoNotch`).
+    public var autoNotch = false
     public var volume: Float = 0.5
     public var muted = false
     /// De-emphasis time constant in seconds (0 = off).
@@ -96,6 +98,7 @@ public final class DSPEngine: @unchecked Sendable {
     private var rdsResetPending = false
     private var monoDecimator = RealDecimator(factor: 1, taps: [1])
     private var agc = AGC(sampleRate: 48_000)
+    private var notch = AutoNotch(sampleRate: 48_000)
     private var dcBlock = DCBlocker(cutoff: 30, sampleRate: 48_000)
     private var deemphL = Deemphasis(tau: 0, sampleRate: 48_000)
     private var deemphR = Deemphasis(tau: 0, sampleRate: 48_000)
@@ -192,6 +195,11 @@ public final class DSPEngine: @unchecked Sendable {
         }
         if structural || previous!.bandwidth != c.bandwidth {
             buildChannelFilter(c)
+        }
+        if structural {
+            notch = AutoNotch(sampleRate: rates.audioRate)
+        } else if previous!.autoNotch != c.autoNotch {
+            notch.reset()
         }
         if structural || previous!.deemphasis != c.deemphasis {
             let tau = (c.mode == .wfm) ? c.deemphasis : 0
@@ -450,6 +458,9 @@ public final class DSPEngine: @unchecked Sendable {
 
     private func demodulateNarrow(_ n: Int, _ c: DSPConfig) {
         let ra = rates.audioRate
+        let useNotch = c.autoNotch && c.mode.supportsAutoNotch
+        let edges = c.mode.filterEdges(bandwidth: c.bandwidth)
+        let notchMax = max(abs(edges.lo), abs(edges.hi))
         left.withUnsafeMutableBufferPointer { lp in
             let out = lp.baseAddress!
             channel.outRe.withUnsafeBufferPointer { rp in
@@ -460,12 +471,14 @@ public final class DSPEngine: @unchecked Sendable {
                         var split = DSPSplitComplex(realp: UnsafeMutablePointer(mutating: re), imagp: UnsafeMutablePointer(mutating: im))
                         vDSP_zvabs(&split, 1, out, 1, vDSP_Length(n))
                         dcBlock.process(out, count: n)
+                        if useNotch { notch.process(out, count: n, maxFrequency: notchMax) }
                         agc.process(out, count: n, mode: c.agcMode, manualGainDB: c.afGainDB)
                     case .nfm:
                         fm.process(re: re, im: im, count: n, gain: Float(ra / (2 * .pi * 5_000)), output: out)
                         dcBlock.process(out, count: n)
                     case .usb, .lsb, .dsb:
                         out.update(from: re, count: n)
+                        if useNotch { notch.process(out, count: n, maxFrequency: notchMax) }
                         agc.process(out, count: n, mode: c.agcMode, manualGainDB: c.afGainDB)
                     case .cw:
                         // Shift the carrier up to the CW pitch, then take the real part.
