@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Needed when launched as a bare executable (swift run) instead of an .app bundle.
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+        TitleBarDoubleClick.install()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
@@ -41,7 +42,7 @@ struct KymaraApp: App {
                 }
         }
         .defaultSize(width: 1560, height: 940)
-        .windowToolbarStyle(.unified)
+        .windowToolbarStyle(.unifiedCompact)
         .commands {
             CommandMenu("Radio") {
                 Button(radio.isRunning ? "Stop" : "Start") { radio.toggleRunning() }
