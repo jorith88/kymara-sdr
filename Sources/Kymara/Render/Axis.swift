@@ -23,6 +23,22 @@ enum Axis {
         return (step, ticks)
     }
 
+    /// Step for unlabelled ticks between the `major` ones: the finest even subdivision that keeps them
+    /// at least `minSpacing` points apart, or `major` itself when none fits.
+    static func minorStep(major: Double, range: Double, width: Double, minSpacing: Double = 8) -> Double {
+        let mantissa = major / pow(10, floor(log10(major)))
+        let divisions: [Double] = switch (mantissa * 10).rounded() {
+        case 25: [5]
+        case 20: [10, 4, 2]
+        case 50: [10, 5]
+        default: [10, 5, 2]
+        }
+        for n in divisions where major / n / range * width >= minSpacing {
+            return major / n
+        }
+        return major
+    }
+
     static func dbTicks(bottom: Double, top: Double, height: Double) -> [Double] {
         let step = niceStep(range: top - bottom, maxTicks: max(2, Int(height / 45)))
         var ticks: [Double] = []
@@ -34,11 +50,11 @@ enum Axis {
         return ticks
     }
 
-    /// MHz label with just enough decimals for the step.
+    /// MHz label with at least three decimals, more when the step needs them.
     static func frequencyLabel(_ hz: Double, step: Double) -> String {
         let mhz = hz / 1e6
         let s = step / 1e6
-        var decimals = 0
+        var decimals = 3
         while decimals < 6 {
             let scaled = s * pow(10, Double(decimals))
             if abs(scaled - scaled.rounded()) < 1e-6 { break }
