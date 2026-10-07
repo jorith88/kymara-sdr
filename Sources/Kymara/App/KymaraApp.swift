@@ -41,7 +41,7 @@ struct KymaraApp: App {
                 }
         }
         .defaultSize(width: 1560, height: 940)
-        .windowToolbarStyle(.unifiedCompact)
+        .windowToolbarStyle(.unified)
         .commands {
             CommandMenu("Radio") {
                 Button(radio.isRunning ? "Stop" : "Start") { radio.toggleRunning() }
