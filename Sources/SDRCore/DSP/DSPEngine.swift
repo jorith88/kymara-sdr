@@ -16,6 +16,7 @@ public struct DSPConfig: Equatable, Sendable {
     /// De-emphasis time constant in seconds (0 = off).
     public var deemphasis: Double = 50e-6
     public var stereo = true
+    public var rds = true
     public var cwPitch: Double = 700
     public var dcCorrection = true
     public var swapIQ = false
@@ -37,6 +38,7 @@ public struct DSPStatus: Sendable {
     public var agcGainDB: Float = 0
     public var overload = false
     public var samplesPerSecond: Double = 0
+    public var rds = RDSInfo()
 }
 
 /// The receive chain. `process` is called from the source thread; configuration is applied from any thread.
@@ -85,6 +87,8 @@ public final class DSPEngine: @unchecked Sendable {
     private var channel = FFTFilter(realTaps: [1])
     private var fm = FMDemodulator()
     private var stereo: StereoDecoder?
+    private var rds: RDSDecoder?
+    private var rdsResetPending = false
     private var monoDecimator = RealDecimator(factor: 1, taps: [1])
     private var agc = AGC(sampleRate: 48_000)
     private var dcBlock = DCBlocker(cutoff: 30, sampleRate: 48_000)
@@ -114,6 +118,12 @@ public final class DSPEngine: @unchecked Sendable {
     }
 
     public var status: DSPStatus { statusLock.withLock { currentStatus } }
+
+    /// Forget the current station's RDS data (call after retuning).
+    public func resetRDS() {
+        configLock.withLock { rdsResetPending = true }
+        statusLock.withLock { currentStatus.rds = RDSInfo() }
+    }
 
     public var audioRate: Double { DSPEngine.rates(for: config.sampleRate).audioRate }
 
@@ -147,11 +157,13 @@ public final class DSPEngine: @unchecked Sendable {
             let ra = rates.audioRate
             if c.mode == .wfm {
                 stereo = StereoDecoder(inputRate: r1, decimation: rates.decim2)
+                rds = RDSDecoder(inputRate: r1)
                 let cutoff = min(15_000, ra * 0.42)
                 monoDecimator = RealDecimator(factor: rates.decim2,
                                               taps: FIR.lowpass(cutoff: cutoff / r1, transition: max(2_000, ra * 0.5 - cutoff) / r1, maxTaps: 1023))
             } else {
                 stereo = nil
+                rds = nil
                 stage2 = rates.decim2 > 1
                     ? ComplexDecimator(factor: rates.decim2,
                                        taps: FIR.lowpass(cutoff: 0.44 * ra / r1, transition: 0.14 * ra / r1, maxTaps: 1023))
@@ -283,6 +295,12 @@ public final class DSPEngine: @unchecked Sendable {
                     fm.process(re: re.baseAddress!, im: im.baseAddress!, count: nc, gain: gain, output: &demod)
                 }
             }
+            if configLock.withLock({ let r = rdsResetPending; rdsResetPending = false; return r }) {
+                rds?.reset()
+            }
+            if c.rds, let rds {
+                demod.withUnsafeBufferPointer { rds.process(mpx: $0.baseAddress!, count: nc) }
+            }
             if let stereo {
                 audioCount = stereo.process(mpx: demod, count: nc, stereoEnabled: c.stereo)
                 ensure(&left, audioCount)
@@ -345,6 +363,7 @@ public final class DSPEngine: @unchecked Sendable {
         }
         let agcGain = agc.currentGainDB
         let locked = stereo?.locked ?? false
+        let rdsInfo = c.mode == .wfm && c.rds ? rds?.info : nil
         let open = squelchOpen
         let audioRate = rates.audioRate
         statusLock.withLock {
@@ -355,6 +374,7 @@ public final class DSPEngine: @unchecked Sendable {
             currentStatus.agcGainDB = agcGain
             currentStatus.overload = overload
             if let measuredRate { currentStatus.samplesPerSecond = measuredRate }
+            currentStatus.rds = rdsInfo ?? RDSInfo()
         }
     }
 

@@ -120,14 +120,19 @@ struct ContentView: View {
                 Sidebar()
                     .frame(width: 290)
                 Rectangle().fill(Theme.border).frame(width: 1)
-                VSplitView {
-                    ZStack {
-                        MetalDisplay(radio: radio, kind: .spectrum)
-                        SpectrumOverlay()
+                VStack(spacing: 0) {
+                    if radio.mode == .wfm && radio.rdsEnabled {
+                        RDSBar()
                     }
-                    .frame(minHeight: 140, idealHeight: 320)
-                    MetalDisplay(radio: radio, kind: .waterfall)
-                        .frame(minHeight: 100, idealHeight: 420)
+                    VSplitView {
+                        ZStack {
+                            MetalDisplay(radio: radio, kind: .spectrum)
+                            SpectrumOverlay()
+                        }
+                        .frame(minHeight: 140, idealHeight: 320)
+                        MetalDisplay(radio: radio, kind: .waterfall)
+                            .frame(minHeight: 100, idealHeight: 420)
+                    }
                 }
                 if radio.showBookmarks {
                     Rectangle().fill(Theme.border).frame(width: 1)
