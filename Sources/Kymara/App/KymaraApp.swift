@@ -83,6 +83,9 @@ struct KymaraApp: App {
                     .keyboardShortcut("d")
                 Toggle("Mute", isOn: $radio.muted)
                     .keyboardShortcut("m", modifiers: [.command, .shift])
+                Toggle("Auto Notch", isOn: $radio.autoNotch)
+                    .keyboardShortcut("n", modifiers: [.command, .shift])
+                    .disabled(!radio.mode.supportsAutoNotch)
                 Divider()
                 Button(radio.recordingAudio ? "Stop Audio Recording" : "Record Audio") { radio.toggleAudioRecording() }
                     .keyboardShortcut("a", modifiers: [.command, .shift])

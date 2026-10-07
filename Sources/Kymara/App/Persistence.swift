@@ -47,6 +47,7 @@ struct RadioSettings: Codable {
     var squelchAuto = false
     var agcMode: AGCMode = .medium
     var afGain: Double = 20
+    var autoNotch = false
     var deemphasis: Deemphasis = .eu
     var stereo = true
     var rds = true
@@ -105,6 +106,7 @@ extension RadioSettings {
         read(.squelchAuto, &squelchAuto)
         read(.agcMode, &agcMode)
         read(.afGain, &afGain)
+        read(.autoNotch, &autoNotch)
         read(.deemphasis, &deemphasis)
         read(.stereo, &stereo)
         read(.rds, &rds)

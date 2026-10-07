@@ -53,6 +53,14 @@ public enum DemodMode: String, CaseIterable, Codable, Identifiable, Sendable {
         }
     }
 
+    /// Modes where a steady tone in the audio is interference (a carrier or heterodyne), not the signal.
+    public var supportsAutoNotch: Bool {
+        switch self {
+        case .am, .usb, .lsb, .dsb: return true
+        case .nfm, .wfm, .cw: return false
+        }
+    }
+
     /// Filter passband edges relative to the VFO in Hz.
     public func filterEdges(bandwidth bw: Double) -> (lo: Double, hi: Double) {
         switch self {
@@ -113,6 +121,169 @@ public struct DCBlocker {
         }
         x1 = a
         y1 = b
+    }
+}
+
+/// Automatic notch. A long FFT of the audio, averaged over about a second, finds steady tones (carriers,
+/// heterodyne whistles) that stand out from their surroundings; speech moves around and averages away.
+/// Each tone gets a narrow IIR notch, so the audio itself sees no FFT latency. The averaging lets it
+/// catch tones that are far weaker than the total audio.
+public final class AutoNotch {
+    private struct Notch {
+        var frequency: Float
+        var c: Float = 0
+        var x1: Float = 0, x2: Float = 0, y1: Float = 0, y2: Float = 0
+    }
+
+    public static let maxNotches = 8
+    private let sampleRate: Float
+    private let size: Int
+    private let hop: Int
+    private let binHz: Float
+    /// Pole radius for a notch about 50 Hz wide.
+    private let r: Float
+    private let alpha: Float
+    /// A tone must stand this far above the local median to get a notch; half as far to keep one.
+    private let threshold: Float = 4
+    private let warmup: Int
+    private let fft: vDSP_DFT_Setup
+    private var window: [Float]
+    private var history: [Float]
+    private var historyPos = 0
+    private var sinceDetect = 0
+    private var frames = 0
+    private var smooth: [Float]
+    private var re: [Float], im: [Float], outRe: [Float], outIm: [Float]
+    private var scratch: [Float] = []
+    private var notches: [Notch] = []
+
+    public init(sampleRate: Double) {
+        self.sampleRate = Float(sampleRate)
+        size = sampleRate > 64_000 ? 8192 : 4096
+        hop = size / 2
+        binHz = Float(sampleRate) / Float(size)
+        r = 1 - .pi * 50 / Float(sampleRate)
+        let averaging: Float = 1
+        alpha = 1 - exp(-Float(hop) / Float(sampleRate) / averaging)
+        warmup = Int((averaging * Float(sampleRate) / Float(hop)).rounded(.up))
+        fft = vDSP_DFT_zop_CreateSetup(nil, vDSP_Length(size), .FORWARD)!
+        window = [Float](repeating: 0, count: size)
+        vDSP_hann_window(&window, vDSP_Length(size), Int32(vDSP_HANN_NORM))
+        history = [Float](repeating: 0, count: size)
+        smooth = [Float](repeating: 0, count: size / 2 + 1)
+        re = [Float](repeating: 0, count: size)
+        im = re
+        outRe = re
+        outIm = re
+    }
+
+    deinit { vDSP_DFT_DestroySetup(fft) }
+
+    /// Frequencies currently notched, in Hz.
+    public var frequencies: [Float] { notches.map(\.frequency) }
+
+    public func reset() {
+        vDSP_vclr(&history, 1, vDSP_Length(size))
+        vDSP_vclr(&smooth, 1, vDSP_Length(smooth.count))
+        historyPos = 0
+        sinceDetect = 0
+        frames = 0
+        notches = []
+    }
+
+    /// `maxFrequency`: upper edge of the audio passband; tones are only searched below it.
+    public func process(_ x: UnsafeMutablePointer<Float>, count: Int, maxFrequency: Double) {
+        var done = 0
+        while done < count {
+            let n = min(count - done, hop - sinceDetect)
+            let p = x + done
+            for k in 0..<n {
+                history[historyPos] = p[k]
+                historyPos = historyPos + 1 == size ? 0 : historyPos + 1
+            }
+            filter(p, count: n)
+            sinceDetect += n
+            done += n
+            if sinceDetect == hop {
+                sinceDetect = 0
+                detect(maxFrequency: Float(maxFrequency))
+            }
+        }
+    }
+
+    private func filter(_ x: UnsafeMutablePointer<Float>, count: Int) {
+        let r = r, r2 = r * r
+        notches.withUnsafeMutableBufferPointer { ns in
+            for i in ns.indices {
+                var t = ns[i]
+                let c = t.c
+                for k in 0..<count {
+                    let v = x[k]
+                    let y = v + c * t.x1 + t.x2 - r * c * t.y1 - r2 * t.y2
+                    t.x2 = t.x1
+                    t.x1 = v
+                    t.y2 = t.y1
+                    t.y1 = y
+                    x[k] = y
+                }
+                ns[i] = t
+            }
+        }
+    }
+
+    private func detect(maxFrequency: Float) {
+        // Oldest sample first.
+        let tail = size - historyPos
+        history.withUnsafeBufferPointer { h in
+            re.withUnsafeMutableBufferPointer { d in
+                d.baseAddress!.update(from: h.baseAddress! + historyPos, count: tail)
+                (d.baseAddress! + tail).update(from: h.baseAddress!, count: historyPos)
+            }
+        }
+        re.inPlace { vDSP_vmul($0, 1, window, 1, $0, 1, vDSP_Length(size)) }
+        vDSP_vclr(&im, 1, vDSP_Length(size))
+        vDSP_DFT_Execute(fft, re, im, &outRe, &outIm)
+        let half = size / 2
+        let a = frames == 0 ? 1 : alpha
+        for b in 0...half {
+            let p = outRe[b] * outRe[b] + outIm[b] * outIm[b]
+            smooth[b] += a * (p - smooth[b])
+        }
+        frames += 1
+        guard frames >= warmup else { return }
+
+        let lo = max(2, Int((100 / binHz).rounded(.up)))
+        let hi = min(half - 2, Int(min(maxFrequency, 0.45 * sampleRate) / binHz))
+        guard hi > lo + 4 else { notches = []; return }
+        let reach = max(8, Int(375 / binHz))
+        var found: [(frequency: Float, excess: Float)] = []
+        for b in (lo + 1)..<hi where smooth[b] > smooth[b - 1] && smooth[b] >= smooth[b + 1] {
+            // Median of the neighbourhood within the passband.
+            let from = max(lo, b - reach), to = min(hi, b + reach)
+            scratch.removeAll(keepingCapacity: true)
+            scratch.append(contentsOf: smooth[from...to])
+            scratch.sort()
+            let floor = max(scratch[scratch.count / 2], 1e-20)
+            let f = Float(b) * binHz
+            let kept = notches.contains { abs($0.frequency - f) < 2 * binHz }
+            let excess = smooth[b] / floor
+            guard excess > (kept ? threshold / 2 : threshold) else { continue }
+            // Parabolic interpolation on the log spectrum for a sub-bin frequency.
+            let l = log(smooth[b - 1] + 1e-30), m = log(smooth[b]), rr = log(smooth[b + 1] + 1e-30)
+            let den = l - 2 * m + rr
+            let d = den < 0 ? max(-0.5, min(0.5, 0.5 * (l - rr) / den)) : 0
+            found.append(((Float(b) + d) * binHz, excess))
+        }
+        found.sort { $0.excess > $1.excess }
+        var next: [Notch] = []
+        for t in found.prefix(AutoNotch.maxNotches) {
+            // Keep a tracked notch's state so a drifting tone does not click.
+            var n = notches.first { abs($0.frequency - t.frequency) < 2 * binHz } ?? Notch(frequency: t.frequency)
+            n.frequency = t.frequency
+            n.c = -2 * cos(2 * .pi * t.frequency / sampleRate)
+            next.append(n)
+        }
+        notches = next
     }
 }
 
