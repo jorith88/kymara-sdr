@@ -34,6 +34,13 @@ Two modules: **SDRCore** (sources, DSP, audio, recording — no UI) and **Kymara
 
 **Rendering.** Shaders are compiled at runtime from a string in `MetalContext.swift` (no offline Metal toolchain needed). Spectrum geometry is built on the CPU per frame (max-per-pixel resampling) into a triple-buffered vertex ring. The waterfall is an R16Float ring texture; a per-row frequency shift buffer keeps old lines aligned after retuning. `Axis` tick math is shared by the GPU grid and the SwiftUI labels. Spectrum and waterfall have their own theme setting (`DisplayTheme`: auto follows the app theme, or forced light/dark); the renderers resolve it against the view's effective appearance each frame (`SpectrumColors.light/.dark`; each `WaterfallPalette` has a light variant).
 
+**UI conventions** (macOS HIG). `Theme` maps to AppKit semantic colours (accent = the user's accent colour); only
+the frequency LCD has fixed colours. Every toolbar item also exists in the menu bar (display commands in the View
+menu, radio commands in the Radio menu), and the toolbar is customizable (`.toolbar(id:)`). App-wide preferences
+that are not touched while listening (appearance, display theme) live in the `Settings` scene (⌘,), not the sidebar.
+Controls in a `Row` keep a real label (hidden with `.labelsHidden()`) so VoiceOver can read them; don't use
+`Toggle("")`/`Picker("")`. Keep text ≥ 10 pt and gate animations on `accessibilityReduceMotion`.
+
 **Persistence** (`Persistence.swift`). Settings and favourites live in UserDefaults under separate keys. `RadioSettings` has a hand-written tolerant `init(from:)`: when adding a setting, add the field to `RadioSettings`, a `read(.key, &field)` line there, and the load/save mapping in `RadioController.load()` / `currentSettings()`. Never make decoding of the whole blob depend on a new field.
 
 **librtlsdr** is loaded with `dlopen` (`RTLSDRLibrary`), looking in the app's Frameworks folder first, then Homebrew. It is not a link-time dependency.

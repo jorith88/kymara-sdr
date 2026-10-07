@@ -36,10 +36,10 @@ struct SMeterView: View {
                     .foregroundStyle(dbm > -73 ? Theme.amber : Theme.lcdText)
                     .contentTransition(.identity)
                 Text(radio.isRunning ? String(format: "%.1f dBm", dbm) : " ")
-                    .font(.system(size: 10.5, design: .monospaced))
+                    .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
                 Text(radio.isRunning ? String(format: "%.1f dBFS", radio.signalDB) : " ")
-                    .font(.system(size: 10.5, design: .monospaced))
+                    .font(.caption.monospaced())
                     .foregroundStyle(.tertiary)
             }
             .frame(width: 92, alignment: .trailing)
@@ -80,13 +80,17 @@ struct SMeterView: View {
                 for (text, value) in labels {
                     let x = CGFloat(position(value)) * size.width
                     let color: Color = value > -73 ? Theme.red.opacity(0.9) : Theme.dim
-                    ctx.draw(Text(text).font(.system(size: 9, weight: .medium)).foregroundStyle(color),
+                    ctx.draw(Text(text).font(.system(size: 10, weight: .medium)).foregroundStyle(color),
                              at: CGPoint(x: min(max(x, 8), size.width - 10), y: 7))
                     ctx.fill(Path(CGRect(x: x - 0.5, y: 13, width: 1, height: 4)), with: .color(color.opacity(0.7)))
                 }
             }
             .frame(width: 260, height: 42)
             .drawingGroup()
+            .accessibilityHidden(true)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Signal strength")
+        .accessibilityValue(radio.isRunning ? "\(Self.sUnits(dbm)), \(String(format: "%.0f", dbm)) dBm" : "Radio stopped")
     }
 }

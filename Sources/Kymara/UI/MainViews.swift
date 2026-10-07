@@ -20,7 +20,7 @@ struct SpectrumOverlay: View {
                 ForEach(Axis.dbTicks(bottom: bottom, top: top, height: h), id: \.self) { db in
                     let y = min(max(h - (db - bottom) / (top - bottom) * h, 7), h - 7)
                     let label = Text("\(Int(db))")
-                        .font(.system(size: 9.5, design: .monospaced))
+                        .font(.system(size: 10, design: .monospaced))
                         .foregroundStyle(scale.opacity(0.7))
                     label.position(x: 16, y: y)
                     label.position(x: w - 16, y: y)
@@ -63,8 +63,8 @@ struct SpectrumOverlay: View {
                 // Zoom indicator.
                 if radio.zoom > 1.01 {
                     Text(String(format: "Zoom ×%.1f · span %@", radio.zoom, FrequencyFormat.bandwidth(span)))
-                        .font(.system(size: 9.5))
-                        .foregroundStyle(scale.opacity(0.55))
+                        .font(.system(size: 10))
+                        .foregroundStyle(scale.opacity(0.6))
                         .fixedSize()
                         .position(x: w - 110, y: 28)
                 }
@@ -84,8 +84,11 @@ struct StatusBar: View {
                 Circle()
                     .fill(radio.isRunning ? Theme.green : Color.gray)
                     .frame(width: 7, height: 7)
+                    .accessibilityHidden(true)
                 Text(radio.sourceName)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityValue(radio.isRunning ? "Running" : "Stopped")
             item("Rate", String(format: "%.3f MS/s", radio.sampleRate / 1e6))
             if radio.isRunning {
                 item("Actual", String(format: "%.3f MS/s", radio.measuredRate / 1e6))
@@ -96,8 +99,9 @@ struct StatusBar: View {
             Text("Scroll: tune · ⌘/⌥ scroll or pinch: zoom · drag: pan/LO · ⌥: fine")
                 .foregroundStyle(.tertiary)
         }
-        .font(.system(size: 10.5))
+        .font(.caption)
         .foregroundStyle(.secondary)
+        .lineLimit(1)
         .padding(.horizontal, 10)
         .frame(height: 22)
         .background(Theme.ribbon)
@@ -107,13 +111,15 @@ struct StatusBar: View {
     private func item(_ label: String, _ value: String) -> some View {
         HStack(spacing: 4) {
             Text(label).foregroundStyle(.tertiary)
-            Text(value).font(.system(size: 10.5, design: .monospaced))
+            Text(value).font(.caption.monospaced())
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
 struct ContentView: View {
     @Environment(RadioController.self) private var radio
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         @Bindable var radio = radio
@@ -126,6 +132,10 @@ struct ContentView: View {
                 SpectrumSplit(fraction: $radio.spectrumFraction) {
                     ZStack {
                         MetalDisplay(radio: radio, kind: .spectrum)
+                            .accessibilityElement()
+                            .accessibilityLabel("Spectrum")
+                            .accessibilityValue("Tuned to \(FrequencyFormat.short(radio.vfoFrequency))")
+                            .accessibilityHint("Scroll to tune, drag to pan")
                         SpectrumOverlay()
                         if radio.mode == .wfm && radio.rdsEnabled && radio.showRDSPanel && radio.rds.hasData {
                             GeometryReader { geo in
@@ -136,13 +146,15 @@ struct ContentView: View {
                                     .padding(.horizontal, 44)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity,
                                            alignment: vfoOnRight ? .topLeading : .topTrailing)
-                                    .animation(.easeInOut(duration: 0.25), value: vfoOnRight)
+                                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: vfoOnRight)
                             }
                             .allowsHitTesting(false)
                         }
                     }
                 } bottom: {
                     MetalDisplay(radio: radio, kind: .waterfall)
+                        .accessibilityElement()
+                        .accessibilityLabel("Waterfall")
                 }
                 if radio.showBookmarks {
                     Rectangle().fill(Theme.border).frame(width: 1)
@@ -153,25 +165,38 @@ struct ContentView: View {
             StatusBar()
         }
         .background(Theme.window)
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
+        // Identified items make the toolbar user-customizable (View > Customize Toolbar…).
+        .toolbar(id: "main") {
+            ToolbarItem(id: "zoomOut", placement: .primaryAction) {
                 Button {
                     radio.setZoom(radio.zoom / 2)
-                } label: { Label("Zoom out", systemImage: "minus.magnifyingglass") }
+                } label: { Label("Zoom Out", systemImage: "minus.magnifyingglass") }
+                .help("Zoom out (⌘−)")
+            }
+            ToolbarItem(id: "zoomIn", placement: .primaryAction) {
                 Button {
                     radio.setZoom(radio.zoom * 2)
-                } label: { Label("Zoom in", systemImage: "plus.magnifyingglass") }
+                } label: { Label("Zoom In", systemImage: "plus.magnifyingglass") }
+                .help("Zoom in (⌘=)")
+            }
+            ToolbarItem(id: "autoRange", placement: .primaryAction) {
                 Button {
                     radio.autoRange()
-                } label: { Label("Auto range", systemImage: "arrow.up.and.down.text.horizontal") }
+                } label: { Label("Auto Range", systemImage: "arrow.up.and.down.text.horizontal") }
+                .help("Fit the spectrum and waterfall levels to the signal (⌥⌘0)")
+            }
+            ToolbarItem(id: "rdsPanel", placement: .primaryAction) {
                 Toggle(isOn: $radio.showRDSPanel) {
-                    Label("RDS panel", systemImage: "info.circle")
+                    Label("RDS Panel", systemImage: "info.circle")
                 }
                 .disabled(radio.mode != .wfm || !radio.rdsEnabled)
                 .help("Show or hide the RDS panel on the spectrum (⇧⌘R)")
+            }
+            ToolbarItem(id: "favourites", placement: .primaryAction) {
                 Toggle(isOn: $radio.showBookmarks) {
                     Label("Favourites", systemImage: "sidebar.right")
                 }
+                .help("Show or hide favourites (⌥⌘B)")
             }
         }
         .alert("Error", isPresented: Binding(get: { radio.errorMessage != nil }, set: { if !$0 { radio.errorMessage = nil } })) {

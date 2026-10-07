@@ -497,6 +497,10 @@ final class RadioController {
         return url
     }
 
+    func showRecordingsInFinder() {
+        NSWorkspace.shared.open(Self.recordingsFolder)
+    }
+
     private func timestamp() -> String {
         let f = DateFormatter()
         f.dateFormat = "yyyyMMdd_HHmmss"

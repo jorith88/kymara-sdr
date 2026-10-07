@@ -21,26 +21,29 @@ struct BookmarksView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Image(systemName: "star.fill").foregroundStyle(Theme.amber)
-                Text("FAVOURITES")
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .tracking(0.8)
+                Image(systemName: "star.fill")
+                    .foregroundStyle(Theme.amber)
+                    .accessibilityHidden(true)
+                Text("Favourites")
+                    .font(.subheadline.weight(.semibold))
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
                 Button {
                     radio.addBookmark()
                 } label: {
-                    Image(systemName: "plus")
+                    Label("Add to Favourites", systemImage: "plus")
+                        .labelStyle(.iconOnly)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
-                .help("Add the current frequency (⌘D)")
+                .help("Add the current frequency to favourites (⌘D)")
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .frame(minHeight: 32)
             .background(Theme.panelHeader)
 
-            TextField("Filter", text: $filter)
-                .textFieldStyle(.roundedBorder)
-                .controlSize(.small)
+            SearchField(text: $filter, prompt: "Filter")
                 .padding(6)
 
             List(selection: $selection) {
@@ -55,7 +58,7 @@ struct BookmarksView: View {
                                 .contextMenu {
                                     Button("Tune") { radio.recall(b) }
                                     Button("Edit…") { editing = b }
-                                    Button("Update to current frequency") { update(b) }
+                                    Button("Update to Current Frequency") { update(b) }
                                     Divider()
                                     Button("Delete", role: .destructive) { delete(b) }
                                 }
@@ -98,21 +101,23 @@ private struct BookmarkRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(bookmark.name)
-                .font(.system(size: 11.5, weight: active ? .semibold : .regular))
+                .font(.body.weight(active ? .semibold : .regular))
                 .foregroundStyle(active ? Theme.accent : .primary)
                 .lineLimit(1)
             HStack(spacing: 6) {
                 Text(FrequencyFormat.dotted(bookmark.frequency))
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(.caption.monospaced())
                 Text(bookmark.mode.rawValue)
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: 10, weight: .bold))
                     .padding(.horizontal, 3)
                     .background(Theme.fillStrong, in: RoundedRectangle(cornerRadius: 2))
                 Text(FrequencyFormat.bandwidth(bookmark.bandwidth))
-                    .font(.system(size: 9.5))
+                    .font(.caption)
             }
             .foregroundStyle(.secondary)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(active ? .isSelected : [])
         .padding(.vertical, 1)
     }
 }
@@ -145,6 +150,43 @@ private struct BookmarkEditor: View {
                     dismiss()
                 }
             }
+        }
+    }
+}
+
+/// Native search field (magnifying glass, clear button, Esc clears). SwiftUI only offers one
+/// through `.searchable`, which needs a navigation container.
+private struct SearchField: NSViewRepresentable {
+    @Binding var text: String
+    let prompt: String
+
+    func makeNSView(context: Context) -> NSSearchField {
+        let field = NSSearchField()
+        field.placeholderString = prompt
+        field.controlSize = .small
+        field.font = .systemFont(ofSize: NSFont.systemFontSize(for: .small))
+        field.sendsSearchStringImmediately = true
+        field.delegate = context.coordinator
+        // The clear button sends the action without a text-change notification.
+        field.target = context.coordinator
+        field.action = #selector(Coordinator.search(_:))
+        return field
+    }
+
+    func updateNSView(_ field: NSSearchField, context: Context) {
+        if field.stringValue != text { field.stringValue = text }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
+
+    final class Coordinator: NSObject, NSSearchFieldDelegate {
+        var text: Binding<String>
+        init(text: Binding<String>) { self.text = text }
+
+        @objc func search(_ field: NSSearchField) { text.wrappedValue = field.stringValue }
+
+        func controlTextDidChange(_ note: Notification) {
+            if let field = note.object as? NSSearchField { text.wrappedValue = field.stringValue }
         }
     }
 }

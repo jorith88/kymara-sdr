@@ -22,8 +22,8 @@ struct RDSOverlay: View {
                 HStack(spacing: 14) {
                     if !r.ptyName.isEmpty { Text(r.ptyName) }
                     Text(String(format: "%.1f", radio.vfoFrequency / 1e6))
-                    badge("TP", on: r.trafficProgram, color: Color(red: 0.4, green: 0.75, blue: 1))
-                    badge("TA", on: r.trafficAnnouncement, color: Color(red: 1, green: 0.75, blue: 0.2))
+                    badge("TP", on: r.trafficProgram, color: Color(nsColor: .systemBlue))
+                    badge("TA", on: r.trafficAnnouncement, color: Color(nsColor: .systemOrange))
                 }
                 HStack(spacing: 14) {
                     Text("PI \(r.piHex)")
@@ -58,6 +58,9 @@ struct RDSOverlay: View {
         .background(.black.opacity(0.62), in: RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.08)))
         .opacity(r.synced ? 1 : 0.6)
+        .environment(\.colorScheme, .dark)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("RDS")
     }
 
     private func badge(_ text: String, on: Bool, color: Color) -> some View {
@@ -66,6 +69,8 @@ struct RDSOverlay: View {
             .padding(.horizontal, 4)
             .padding(.vertical, 1)
             .foregroundStyle(on ? color : .white.opacity(0.3))
+            .accessibilityLabel(on ? text : "")
+            .accessibilityHidden(!on)
             .overlay(RoundedRectangle(cornerRadius: 3).stroke(on ? color : .white.opacity(0.2)))
     }
 }
