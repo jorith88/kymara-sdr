@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>Mac SDR Console</string>
+    <string>Kymara</string>
     <key>CFBundleDisplayName</key>
-    <string>Mac SDR Console</string>
+    <string>Kymara</string>
     <key>CFBundleIdentifier</key>
-    <string>io.github.macsdrconsole</string>
+    <string>io.github.kymara</string>
     <key>CFBundleExecutable</key>
-    <string>SDRConsole</string>
+    <string>Kymara</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundlePackageType</key>

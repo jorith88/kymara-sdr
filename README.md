@@ -1,4 +1,4 @@
-# Mac SDR Console
+# Kymara
 
 Native macOS-ontvanger voor RTL-SDR dongles (Apple silicon), geïnspireerd op SDR Console.
 Swift + SwiftUI, DSP met Accelerate/vDSP, spectrum en waterfall op de GPU via Metal.
@@ -7,11 +7,11 @@ Swift + SwiftUI, DSP met Accelerate/vDSP, spectrum en waterfall op de GPU via Me
 
 ```bash
 brew install librtlsdr          # alleen nodig om te bouwen/bundelen; de .app bevat daarna zelf librtlsdr + libusb
-./scripts/build-app.sh          # → build/Mac SDR Console.app
-open "build/Mac SDR Console.app"
+./scripts/build-app.sh          # → build/Kymara.app
+open "build/Kymara.app"
 ```
 
-Tijdens ontwikkelen: `swift run -c release SDRConsole`. Tests: `swift test -c release`.
+Tijdens ontwikkelen: `swift run -c release Kymara`. Tests: `swift test -c release`.
 
 ## Functies
 
@@ -30,7 +30,7 @@ instelbare snelheid en niveaus, die bij verstemmen correct meeschuift; FFT 1k–
 auto-range. S-meter (S1–S9+60, dBm-schatting en dBFS, piek- en squelchmarkering).
 
 **Opnemen:** audio (16-bit stereo WAV) en I/Q (8-bit WAV, af te spelen als bestandsbron), in
-`~/Music/SDR Console Recordings`.
+`~/Music/Kymara Recordings`.
 
 **Favorieten:** gegroepeerd, filterbaar, bewerkbaar.
 
@@ -56,6 +56,6 @@ Sneltoetsen: ⌘R start/stop, ⌘1–7 modes, ⌘D favoriet, ⌘=/⌘−/⌘0 zo
 - `Sources/SDRCore` — bronnen (librtlsdr via `dlopen`, rtl_tcp, bestand, demo), DSP-keten
   (NCO → decimatie naar ~240 kHz → kanaalfilter (overlap-save FFT) → demodulatie → ~48 kHz audio),
   spectrumanalyse, audio-uitvoer (AVAudioEngine) en opname.
-- `Sources/SDRConsole` — SwiftUI-app, `RadioController` (status en instellingen), Metal-renderers.
+- `Sources/Kymara` — SwiftUI-app, `RadioController` (status en instellingen), Metal-renderers.
 
 De DSP verwerkt 1 s aan 2,4 MS/s in ~15–25 ms op Apple silicon.

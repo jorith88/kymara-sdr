@@ -517,7 +517,7 @@ final class RadioController {
     static var recordingsFolder: URL {
         let base = FileManager.default.urls(for: .musicDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser
-        let url = base.appendingPathComponent("SDR Console Recordings", isDirectory: true)
+        let url = base.appendingPathComponent("Kymara Recordings", isDirectory: true)
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }
