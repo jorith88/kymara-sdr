@@ -107,7 +107,7 @@ private struct BookmarkRow: View {
                 Text(bookmark.mode.rawValue)
                     .font(.system(size: 9, weight: .bold))
                     .padding(.horizontal, 3)
-                    .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 2))
+                    .background(Theme.fillStrong, in: RoundedRectangle(cornerRadius: 2))
                 Text(FrequencyFormat.bandwidth(bookmark.bandwidth))
                     .font(.system(size: 9.5))
             }

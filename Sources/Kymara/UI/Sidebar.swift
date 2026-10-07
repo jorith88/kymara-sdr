@@ -272,6 +272,13 @@ struct DisplayPanel: View {
     var body: some View {
         @Bindable var radio = radio
         Panel("Display", systemImage: "waveform.path.ecg.rectangle") {
+            Row("Theme") {
+                Picker("", selection: $radio.theme) {
+                    ForEach(AppTheme.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            }
             Row("FFT size") {
                 Picker("", selection: $radio.fftSize) {
                     ForEach(SpectrumAnalyzer.sizes, id: \.self) { Text("\($0)").tag($0) }

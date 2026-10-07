@@ -1,18 +1,61 @@
 import SwiftUI
+import AppKit
+
+enum AppTheme: String, CaseIterable, Identifiable, Codable {
+    case system = "System"
+    case light = "Light"
+    case dark = "Dark"
+
+    var id: String { rawValue }
+
+    var appearance: NSAppearance? {
+        switch self {
+        case .system: return nil
+        case .light: return NSAppearance(named: .aqua)
+        case .dark: return NSAppearance(named: .darkAqua)
+        }
+    }
+
+    @MainActor
+    func apply() {
+        NSApplication.shared.appearance = appearance
+    }
+}
+
+extension NSColor {
+    /// Colour that resolves per appearance (light/dark).
+    static func adaptive(light: NSColor, dark: NSColor) -> NSColor {
+        NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
+        }
+    }
+
+    static func rgb(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat, _ a: CGFloat = 1) -> NSColor {
+        NSColor(srgbRed: r, green: g, blue: b, alpha: a)
+    }
+}
+
+private func adaptive(_ light: NSColor, _ dark: NSColor) -> Color {
+    Color(nsColor: .adaptive(light: light, dark: dark))
+}
 
 enum Theme {
-    static let window = Color(red: 0.085, green: 0.09, blue: 0.105)
-    static let panel = Color(red: 0.12, green: 0.128, blue: 0.148)
-    static let panelHeader = Color(red: 0.155, green: 0.165, blue: 0.19)
-    static let ribbon = Color(red: 0.105, green: 0.112, blue: 0.13)
-    static let border = Color.white.opacity(0.08)
-    static let accent = Color(red: 0.25, green: 0.72, blue: 1.0)
-    static let lcd = Color(red: 0.02, green: 0.03, blue: 0.05)
-    static let lcdText = Color(red: 0.85, green: 0.95, blue: 1.0)
-    static let dim = Color.white.opacity(0.45)
-    static let red = Color(red: 1, green: 0.3, blue: 0.25)
-    static let green = Color(red: 0.3, green: 0.9, blue: 0.4)
-    static let amber = Color(red: 1, green: 0.75, blue: 0.2)
+    static let window = adaptive(.rgb(0.925, 0.93, 0.94), .rgb(0.085, 0.09, 0.105))
+    static let panel = adaptive(.rgb(0.975, 0.977, 0.982), .rgb(0.12, 0.128, 0.148))
+    static let panelHeader = adaptive(.rgb(0.89, 0.9, 0.915), .rgb(0.155, 0.165, 0.19))
+    static let ribbon = adaptive(.rgb(0.955, 0.958, 0.965), .rgb(0.105, 0.112, 0.13))
+    static let border = adaptive(.rgb(0, 0, 0, 0.12), .rgb(1, 1, 1, 0.08))
+    static let accent = adaptive(.rgb(0.0, 0.47, 0.85), .rgb(0.25, 0.72, 1.0))
+    static let lcd = adaptive(.rgb(0.86, 0.9, 0.93), .rgb(0.02, 0.03, 0.05))
+    static let lcdText = adaptive(.rgb(0.05, 0.12, 0.22), .rgb(0.85, 0.95, 1.0))
+    static let dim = adaptive(.rgb(0, 0, 0, 0.55), .rgb(1, 1, 1, 0.45))
+    static let text = adaptive(.rgb(0, 0, 0, 0.85), .rgb(1, 1, 1, 0.85))
+    /// Subtle fill for buttons and chips.
+    static let fill = adaptive(.rgb(0, 0, 0, 0.06), .rgb(1, 1, 1, 0.07))
+    static let fillStrong = adaptive(.rgb(0, 0, 0, 0.12), .rgb(1, 1, 1, 0.12))
+    static let red = adaptive(.rgb(0.85, 0.15, 0.12), .rgb(1, 0.3, 0.25))
+    static let green = adaptive(.rgb(0.1, 0.62, 0.22), .rgb(0.3, 0.9, 0.4))
+    static let amber = adaptive(.rgb(0.8, 0.5, 0.0), .rgb(1, 0.75, 0.2))
 }
 
 /// Collapsible sidebar section in the SDR Console style.
@@ -133,12 +176,12 @@ struct ChipButton: View {
                 .frame(minWidth: 34)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 4)
-                .foregroundStyle(selected ? Color.black : Color.white.opacity(0.85))
+                .foregroundStyle(selected ? Color.white : Theme.text)
                 .background(
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(selected ? Theme.accent : Color.white.opacity(0.07))
+                        .fill(selected ? Theme.accent : Theme.fill)
                 )
-                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.white.opacity(selected ? 0 : 0.08)))
+                .overlay(RoundedRectangle(cornerRadius: 4).stroke(selected ? Color.clear : Theme.border))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

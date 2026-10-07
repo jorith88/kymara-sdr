@@ -138,7 +138,6 @@ struct ContentView: View {
             StatusBar()
         }
         .background(Theme.window)
-        .preferredColorScheme(.dark)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {

@@ -75,6 +75,7 @@ struct RadioSettings: Codable {
     var fillSpectrum = true
     var meterCalibration: Double = -10
     var showBookmarks = true
+    var theme: AppTheme? = nil
     var bookmarks: [Bookmark]? = nil
 }
 
@@ -152,6 +153,7 @@ final class RadioController {
     var peakHold = false { didSet { scheduleSave() } }
     var fillSpectrum = true { didSet { scheduleSave() } }
     var showBookmarks = true { didSet { scheduleSave() } }
+    var theme: AppTheme = .system { didSet { theme.apply(); scheduleSave() } }
     /// Visible span = sampleRate / zoom.
     private(set) var zoom: Double = 1
     /// View centre relative to the tuner centre frequency.
@@ -655,6 +657,8 @@ final class RadioController {
         fillSpectrum = s.fillSpectrum
         meterCalibration = s.meterCalibration
         showBookmarks = s.showBookmarks
+        theme = s.theme ?? .system
+        theme.apply()
         bookmarks = s.bookmarks ?? Self.defaultBookmarks
         if abs(vfoFrequency - centerFrequency) > sampleRate * 0.48 { centerFrequency = vfoFrequency - sampleRate / 8 }
     }
@@ -704,6 +708,7 @@ final class RadioController {
         s.fillSpectrum = fillSpectrum
         s.meterCalibration = meterCalibration
         s.showBookmarks = showBookmarks
+        s.theme = theme
         s.bookmarks = bookmarks
         return s
     }

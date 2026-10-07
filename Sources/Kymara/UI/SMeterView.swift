@@ -62,7 +62,7 @@ struct SMeterView: View {
                 // Peak marker.
                 if radio.isRunning {
                     let px = CGFloat(position(peakDBm)) * size.width
-                    ctx.fill(Path(CGRect(x: px - 1, y: barTop - 2, width: 2, height: barH + 4)), with: .color(.white.opacity(0.85)))
+                    ctx.fill(Path(CGRect(x: px - 1, y: barTop - 2, width: 2, height: barH + 4)), with: .color(Theme.text))
                 }
                 // Squelch marker.
                 if let squelchDBm {
@@ -79,7 +79,7 @@ struct SMeterView: View {
                                                   ("+20", -53), ("+40", -33), ("+60", -13)]
                 for (text, value) in labels {
                     let x = CGFloat(position(value)) * size.width
-                    let color: Color = value > -73 ? Theme.red.opacity(0.9) : .white.opacity(0.6)
+                    let color: Color = value > -73 ? Theme.red.opacity(0.9) : Theme.dim
                     ctx.draw(Text(text).font(.system(size: 9, weight: .medium)).foregroundStyle(color),
                              at: CGPoint(x: min(max(x, 8), size.width - 10), y: 7))
                     ctx.fill(Path(CGRect(x: x - 0.5, y: 13, width: 1, height: 4)), with: .color(color.opacity(0.7)))
