@@ -66,6 +66,8 @@ struct KymaraApp: App {
                 Button("Reset Zoom") { radio.resetView() }
                     .keyboardShortcut("0", modifiers: [.command])
                 Divider()
+                Toggle("Show RDS Panel", isOn: $radio.showRDSPanel)
+                    .keyboardShortcut("r", modifiers: [.command, .shift])
                 Button("Add Favourite") { radio.addBookmark() }
                     .keyboardShortcut("d")
                 Button(radio.muted ? "Unmute" : "Mute") { radio.muted.toggle() }

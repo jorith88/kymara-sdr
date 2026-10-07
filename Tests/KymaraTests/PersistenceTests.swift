@@ -45,6 +45,7 @@ final class PersistenceTests: XCTestCase {
         XCTAssertEqual(s?.mode, .lsb)
         XCTAssertEqual(s?.fftSize, RadioSettings().fftSize)
         XCTAssertNil(s?.theme)
+        XCTAssertEqual(s?.showRDSPanel, true, "new settings default when absent")
     }
 
     func testUnknownOrInvalidValuesFallBackPerField() {

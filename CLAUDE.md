@@ -3,7 +3,10 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 Kymara is a native macOS (Apple silicon, macOS 14+) SDR receiver for RTL-SDR dongles, modelled on SDR Console.
-Swift Package, Swift 5 language mode (`swiftLanguageModes: [.v5]`), no Xcode project. All UI text and docs are English.
+Swift Package, Swift 5 language mode (`swiftLanguageModes: [.v5]`), no Xcode project.
+
+**Language:** the app (all UI text, messages, menus) and all documentation (README, CLAUDE.md, code comments, commit
+messages) are always written in English, even when the conversation is in another language.
 
 ## Commands
 

@@ -173,6 +173,12 @@ struct ReceiverPanel: View {
                             .foregroundStyle(Theme.green)
                     }
                 }
+                Row("RDS panel") {
+                    Toggle("", isOn: $radio.showRDSPanel)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .disabled(!radio.rdsEnabled)
+                }
             }
 
             if radio.mode == .cw {
