@@ -353,6 +353,32 @@ final class DSPTests: XCTestCase {
         return (engine.status, l)
     }
 
+    func testAutoSquelchCutsNoiseBurstAfterTransmission() {
+        let fs = 2_400_000.0
+        let offset = 200_000.0
+        var phase = 0.0
+        let iq = makeIQ(sampleRate: fs, seconds: 0.8, noise: 0.002) { _, t in
+            guard t < 0.4 else { return (0, 0) }
+            phase += 2 * .pi * (offset + 2_000 * sin(2 * .pi * 1_000 * t)) / fs
+            return (Float(0.01 * cos(phase)), Float(0.01 * sin(phase)))
+        }
+        let engine = DSPEngine()
+        var c = DSPConfig()
+        c.sampleRate = fs
+        c.vfoOffset = offset
+        c.mode = .nfm
+        c.bandwidth = 12_500
+        c.volume = 1
+        c.squelchEnabled = true
+        c.squelchAuto = true
+        engine.config = c
+        let (l, _) = runEngine(engine, iq: iq)
+        let rate = DSPEngine.rates(for: fs).audioRate
+        XCTAssertGreaterThan(rms(l[Int(0.2 * rate)..<Int(0.38 * rate)]), 0.1)
+        // Without tail elimination the 150 ms hang lets full-scale noise through here.
+        XCTAssertLessThan(rms(l[Int(0.43 * rate)..<Int(0.6 * rate)]), 0.01)
+    }
+
     func testAutoSquelchClosedOnNoise() {
         for (mode, bw) in [(DemodMode.nfm, 12_500.0), (.wfm, 180_000)] {
             let r = runAutoSquelch(mode: mode, bandwidth: bw, deviation: 0, amplitude: 0, noise: 0.05)
