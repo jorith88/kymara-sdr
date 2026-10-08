@@ -15,6 +15,7 @@ swift build -c release                         # build (always use release: DSP 
 swift test -c release                          # all tests (SDRCoreTests + KymaraTests)
 swift test -c release --filter RDSTests        # one test class
 swift test -c release --filter DSPTests/testEngineWFMEndToEnd   # one test
+KYMARA_HARDWARE_TESTS=1 swift test -c release --filter SDRplayTests   # include the test with an attached RSP
 ./scripts/build-app.sh                         # → build/Kymara.app (bundles librtlsdr + libusb, ad-hoc signed)
 ./scripts/make-dmg.sh [version]                # → build/Kymara-<version>.dmg (for GitHub releases)
 swift run -c release Kymara                    # run unbundled (uses a separate UserDefaults domain "Kymara")
@@ -54,5 +55,5 @@ Controls in a `Row` keep a real label (hidden with `.labelsHidden()`) so VoiceOv
 - `AudioRingBuffer.read` returns silence *without consuming* until ~80 ms is buffered. A drain loop on a lower threshold never terminates (this once ate 400 GB of RAM in a test).
 - The title bar uses `.windowToolbarStyle(.unifiedCompact)`, where AppKit ignores title-bar double-clicks; `TitleBarDoubleClick.swift` performs the system action instead. Remove it if the toolbar style changes.
 - The terminal has Screen Recording permission: `screencapture -x -o -l <windowID>` grabs the app window (get the ID from `CGWindowListCopyWindowInfo`, owner "Kymara"). Synthetic clicks are untested; to get the app into a state (start the radio, force an appearance), add a temporary env-var hook in `RadioController.init` and remove it before committing.
-- The SDRplay API service keeps a device claimed for a while when the app is killed instead of quit (a test hook should quit with `NSApp.terminate`), so the next start reports "No SDRplay device found". `SDRplayTests.testStreamsFromAttachedDevice` runs against an attached RSP and is skipped without one.
+- The SDRplay API service keeps a device claimed for a while when the app is killed instead of quit (a test hook should quit with `NSApp.terminate`), so the next start reports "No SDRplay device found". `SDRplayTests.testStreamsFromAttachedDevice` streams from an attached RSP; it only runs with `KYMARA_HARDWARE_TESTS=1` (and is skipped without a free device).
 - An RTL-SDR and an SDRplay RSP1 are usually attached to this machine; real FM stations with RDS are around 99.4, 101.6 and 102.3 MHz. The demo source has RDS on 100.0 and 101.2 MHz.

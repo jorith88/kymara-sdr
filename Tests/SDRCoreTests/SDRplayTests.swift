@@ -59,10 +59,14 @@ final class SDRplayTests: XCTestCase {
         XCTAssertEqual(c.ifGainReduction, SDRplayConfig().ifGainReduction)
     }
 
-    /// Streams from an attached RSP. Skipped when the API or a device is missing.
+    /// Streams from an attached RSP (receive only, bias-T stays off). Opt-in, because the result depends on the
+    /// hardware at hand: run with KYMARA_HARDWARE_TESTS=1. Also skipped when the API or a free device is missing.
     func testStreamsFromAttachedDevice() throws {
+        guard ProcessInfo.processInfo.environment["KYMARA_HARDWARE_TESTS"] == "1" else {
+            throw XCTSkip("hardware test; set KYMARA_HARDWARE_TESTS=1 to run it")
+        }
         guard SDRplaySource.isLibraryAvailable, let dev = SDRplaySource.listDevices().first else {
-            throw XCTSkip("no SDRplay device attached")
+            throw XCTSkip("no free SDRplay device (not attached, in use, or the API is missing)")
         }
         let src = SDRplaySource(serial: dev.serial, config: SDRplayConfig())
         let lock = NSLock()
