@@ -84,7 +84,7 @@ public final class DemoSource: IQSource, @unchecked Sendable {
                 let g = self.gainDB
                 self.lock.unlock()
                 generator.generate(into: &bytes, count: block, center: c, gainDB: g)
-                bytes.withUnsafeBufferPointer { handler($0) }
+                bytes.withUnsafeBufferPointer { handler(.u8($0)) }
                 pacer.wait(afterProducing: block)
             }
             self?.finished.signal()
