@@ -31,6 +31,10 @@ public enum SourceError: LocalizedError {
     case openFailed(Int32)
     case fileError(String)
     case connectionFailed(String)
+    case sdrplayAPIMissing
+    case sdrplayService
+    case noSDRplayDevice
+    case sdrplayError(String)
 
     public var errorDescription: String? {
         switch self {
@@ -44,6 +48,14 @@ public enum SourceError: LocalizedError {
             return "IQ file error: \(msg)"
         case .connectionFailed(let msg):
             return "Connection failed: \(msg)"
+        case .sdrplayAPIMissing:
+            return "The SDRplay API was not found. Install the SDRplay API 3.15 or newer for macOS from sdrplay.com/api."
+        case .sdrplayService:
+            return "The SDRplay API service is not responding. Reinstall the SDRplay API or restart the Mac."
+        case .noSDRplayDevice:
+            return "No SDRplay device found. Check the USB connection, and quit other programs that use the RSP."
+        case .sdrplayError(let msg):
+            return "SDRplay: \(msg)"
         }
     }
 }
@@ -61,6 +73,8 @@ public protocol IQSource: AnyObject {
     var sampleBits: Int { get }
     /// Sample rates the source supports; nil means the RTL-SDR set.
     var sampleRates: [Double]? { get }
+    /// True while the hardware reports an RF overload (sources that detect it themselves).
+    var hardwareOverload: Bool { get }
     /// Called (on any thread) when the source fails after starting.
     var onError: ((String) -> Void)? { get set }
     /// Called (on any thread) when `gains` or other info changed.
@@ -84,6 +98,7 @@ public extension IQSource {
     var fixedCenterFrequency: Double? { nil }
     var sampleBits: Int { 8 }
     var sampleRates: [Double]? { nil }
+    var hardwareOverload: Bool { false }
     func setGain(_ tenthsDB: Int?) {}
     func setPPM(_ ppm: Int) {}
     func setRTLAGC(_ on: Bool) {}
