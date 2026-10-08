@@ -28,6 +28,8 @@ struct RadioSettings: Codable {
     var sourceKind: SourceKind = .demo
     var tcpHost = "127.0.0.1"
     var tcpPort = 1234
+    var sdrplaySerial = ""
+    var sdrplay = SDRplayConfig()
     var vfo: Double = 100_000_000
     var center: Double = 99_700_000
     var mode: DemodMode = .wfm
@@ -87,6 +89,8 @@ extension RadioSettings {
         read(.sourceKind, &sourceKind)
         read(.tcpHost, &tcpHost)
         read(.tcpPort, &tcpPort)
+        read(.sdrplaySerial, &sdrplaySerial)
+        read(.sdrplay, &sdrplay)
         read(.vfo, &vfo)
         read(.center, &center)
         read(.mode, &mode)
