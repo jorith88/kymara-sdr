@@ -1,7 +1,29 @@
 import Foundation
 
-/// Receives interleaved unsigned 8-bit I/Q samples (RTL-SDR native format).
-public typealias IQHandler = (UnsafeBufferPointer<UInt8>) -> Void
+/// A block of interleaved I/Q samples: unsigned 8-bit (RTL-SDR native format) or signed 16-bit (SDRplay, WAV files).
+public enum IQSamples {
+    case u8(UnsafeBufferPointer<UInt8>)
+    case s16(UnsafeBufferPointer<Int16>)
+
+    /// Number of complex samples.
+    public var count: Int {
+        switch self {
+        case .u8(let b): return b.count / 2
+        case .s16(let b): return b.count / 2
+        }
+    }
+
+    /// Bits per I or Q value.
+    public var bits: Int {
+        switch self {
+        case .u8: return 8
+        case .s16: return 16
+        }
+    }
+}
+
+/// Receives I/Q sample blocks from a source.
+public typealias IQHandler = (IQSamples) -> Void
 
 public enum SourceError: LocalizedError {
     case libraryMissing
@@ -35,6 +57,10 @@ public protocol IQSource: AnyObject {
     var fixedSampleRate: Double? { get }
     /// Set for sources that cannot be retuned (files).
     var fixedCenterFrequency: Double? { get }
+    /// Bits per I or Q value the source delivers (8 or 16); I/Q recordings use the same width.
+    var sampleBits: Int { get }
+    /// Sample rates the source supports; nil means the RTL-SDR set.
+    var sampleRates: [Double]? { get }
     /// Called (on any thread) when the source fails after starting.
     var onError: ((String) -> Void)? { get set }
     /// Called (on any thread) when `gains` or other info changed.
@@ -56,6 +82,8 @@ public protocol IQSource: AnyObject {
 public extension IQSource {
     var fixedSampleRate: Double? { nil }
     var fixedCenterFrequency: Double? { nil }
+    var sampleBits: Int { 8 }
+    var sampleRates: [Double]? { nil }
     func setGain(_ tenthsDB: Int?) {}
     func setPPM(_ ppm: Int) {}
     func setRTLAGC(_ on: Bool) {}

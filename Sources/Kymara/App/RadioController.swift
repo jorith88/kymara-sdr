@@ -540,7 +540,7 @@ final class RadioController {
         let name = "IQ_\(timestamp())_\(Int(centerFrequency))Hz_\(Int(sampleRate))sps.wav"
         let url = Self.recordingsFolder.appendingPathComponent(name)
         do {
-            try engine.recorder.startIQ(url: url, sampleRate: sampleRate)
+            try engine.recorder.startIQ(url: url, sampleRate: sampleRate, bitsPerSample: source?.sampleBits ?? 8)
             recordingIQ = true
             recordingStart = Date()
         } catch {
