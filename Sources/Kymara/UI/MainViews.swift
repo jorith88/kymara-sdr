@@ -75,6 +75,30 @@ struct SpectrumOverlay: View {
     }
 }
 
+/// Hover readout on the waterfall, so the frequency under the cursor is visible where the mouse is.
+struct WaterfallOverlay: View {
+    @Environment(RadioController.self) private var radio
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            // Only the spectrum reports a level, so a hover without one comes from the waterfall.
+            if let hover = radio.hover, hover.db == nil {
+                let hx = (hover.frequency - radio.viewStart) / radio.viewSpan * w
+                Text(FrequencyFormat.short(hover.frequency))
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 3))
+                    .foregroundStyle(.white)
+                    .fixedSize()
+                    .position(x: hx + (hx > w - 110 ? -55 : 55), y: 14)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
 struct StatusBar: View {
     @Environment(RadioController.self) private var radio
 
@@ -156,6 +180,7 @@ struct ContentView: View {
                         MetalDisplay(radio: radio, kind: .waterfall)
                             .accessibilityElement()
                             .accessibilityLabel("Waterfall")
+                            .overlay { WaterfallOverlay() }
                         BandOverview()
                     }
                 }

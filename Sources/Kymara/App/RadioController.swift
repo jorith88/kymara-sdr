@@ -176,6 +176,14 @@ final class RadioController {
     var filterEdges: (lo: Double, hi: Double) { mode.filterEdges(bandwidth: bandwidth) }
     var filterStart: Double { vfoFrequency + filterEdges.lo }
     var filterEnd: Double { vfoFrequency + filterEdges.hi }
+    /// Where the passband would land if the user clicked at the hover position. Nil over the current
+    /// passband (a click there drags it instead of tuning) and while a mouse button is held.
+    var hoverPassband: (lo: Double, hi: Double)? {
+        guard let hover, NSEvent.pressedMouseButtons == 0,
+              hover.frequency < filterStart || hover.frequency > filterEnd else { return nil }
+        let f = snapped(hover.frequency)
+        return (f + filterEdges.lo, f + filterEdges.hi)
+    }
     var audioRate: Double { DSPEngine.rates(for: sampleRate).audioRate }
     var canRetune: Bool { source?.fixedCenterFrequency == nil || !isRunning }
     var gainDB: Double {
