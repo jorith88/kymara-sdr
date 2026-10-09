@@ -133,7 +133,7 @@ public final class RTLTCPSource: IQSource, @unchecked Sendable {
         }
         guard !data.isEmpty, let handler else { return }
         data.withUnsafeBytes { raw in
-            handler(raw.bindMemory(to: UInt8.self))
+            handler(.u8(raw.bindMemory(to: UInt8.self)))
         }
     }
 

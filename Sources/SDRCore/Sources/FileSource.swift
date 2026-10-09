@@ -18,6 +18,8 @@ public final class FileSource: IQSource, @unchecked Sendable {
     public var gains: [Int] { [] }
     public let fixedSampleRate: Double?
     public let fixedCenterFrequency: Double?
+    /// 8-bit files are passed through; 16-bit and float files are delivered as 16-bit to keep their resolution.
+    public var sampleBits: Int { format == .u8 ? 8 : 16 }
     public var onError: ((String) -> Void)?
     public var onInfoChanged: (() -> Void)?
 
@@ -120,7 +122,8 @@ public final class FileSource: IQSource, @unchecked Sendable {
             let block = max(1024, Int(rate / 50))
             let frameBytes = 2 * format.bytesPerSample
             var position: UInt64 = 0
-            var out = [UInt8](repeating: 127, count: block * 2)
+            var out8 = [UInt8](repeating: 127, count: format == .u8 ? block * 2 : 0)
+            var out16 = [Int16](repeating: 0, count: format == .u8 ? 0 : block * 2)
             try? handle.seek(toOffset: dataOffset)
             while let self, self.isRunning {
                 let want = UInt64(block * frameBytes)
@@ -133,8 +136,14 @@ public final class FileSource: IQSource, @unchecked Sendable {
                 }
                 position += UInt64(data.count)
                 let frames = data.count / frameBytes
-                FileSource.convert(data, format: format, frames: frames, into: &out)
-                out.withUnsafeBufferPointer { handler(UnsafeBufferPointer(rebasing: $0[0..<(frames * 2)])) }
+                let count = frames * 2
+                if format == .u8 {
+                    data.copyBytes(to: &out8, count: count)
+                    out8.withUnsafeBufferPointer { handler(.u8(UnsafeBufferPointer(rebasing: $0[0..<count]))) }
+                } else {
+                    FileSource.convert(data, format: format, count: count, into: &out16)
+                    out16.withUnsafeBufferPointer { handler(.s16(UnsafeBufferPointer(rebasing: $0[0..<count]))) }
+                }
                 pacer.wait(afterProducing: frames)
             }
             self?.finished.signal()
@@ -145,18 +154,17 @@ public final class FileSource: IQSource, @unchecked Sendable {
         thread.start()
     }
 
-    private static func convert(_ data: Data, format: SampleFormat, frames: Int, into out: inout [UInt8]) {
-        let count = frames * 2
+    private static func convert(_ data: Data, format: SampleFormat, count: Int, into out: inout [Int16]) {
         data.withUnsafeBytes { raw in
             switch format {
             case .u8:
-                for i in 0..<count { out[i] = raw[i] }
+                for i in 0..<count { out[i] = Int16(Int(raw[i]) - 128) << 8 }
             case .s16:
                 let p = raw.bindMemory(to: Int16.self)
-                for i in 0..<count { out[i] = UInt8(truncatingIfNeeded: (Int(Int16(littleEndian: p[i])) >> 8) + 128) }
+                for i in 0..<count { out[i] = Int16(littleEndian: p[i]) }
             case .f32:
                 let p = raw.bindMemory(to: Float.self)
-                for i in 0..<count { out[i] = UInt8(max(0, min(255, p[i] * 127.5 + 127.5))) }
+                for i in 0..<count { out[i] = Int16(max(-32768, min(32767, (p[i] * 32768).rounded()))) }
             }
         }
     }

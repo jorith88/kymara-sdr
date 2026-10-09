@@ -1,6 +1,6 @@
 # Kymara
 
-Native macOS receiver for RTL-SDR dongles (Apple silicon), inspired by SDR Console.
+Native macOS receiver for RTL-SDR dongles and SDRplay RSP receivers (Apple silicon), inspired by SDR Console.
 Swift + SwiftUI, DSP with Accelerate/vDSP, spectrum and waterfall rendered on the GPU with Metal.
 
 <picture>
@@ -18,9 +18,19 @@ open "build/Kymara.app"
 
 During development: `swift run -c release Kymara`. Tests: `swift test -c release`.
 
+### SDRplay receivers
+
+SDRplay RSPs need the official **SDRplay API 3.15 or newer** for macOS, installed from
+[sdrplay.com/api](https://www.sdrplay.com/api/). It is closed source, so Kymara cannot bundle it; the app loads it
+at runtime from `/usr/local/lib` and works without it for the other sources. Supported: RSP1, RSP1A, RSP1B, RSP2,
+RSPduo (single-tuner mode) and RSPdx/RSPdx-R2. Only the RSP1 has been tested with real hardware so far.
+
+After an SDRplay API upgrade, `./scripts/check-sdrplay-shim.sh` checks that Kymara's copy of the API's struct
+layouts still matches the installed headers.
+
 ## Features
 
-**Sources:** RTL-SDR over USB, rtl_tcp (network), I/Q files (WAV 8/16-bit/float, raw `.cu8`) and a
+**Sources:** RTL-SDR over USB, SDRplay RSP over USB (16-bit samples), rtl_tcp (network), I/Q files (WAV 8/16-bit/float, raw `.cu8`) and a
 demo generator with FM broadcast, AM, NFM, SSB and CW signals, so everything also works without hardware.
 
 **Receiver:** AM, NFM, WFM (stereo with a 19 kHz pilot PLL, 50/75 µs de-emphasis), USB, LSB, CW (adjustable
@@ -31,13 +41,15 @@ pitch) and DSB. Adjustable bandwidth (presets or by dragging the filter edges), 
 error correction of short bursts. Shown as a panel over the spectrum; new favourites are named after the station.
 
 **RF/tuner:** sample rate 0.25–3.2 MS/s, RF gain or tuner AGC, RTL AGC, PPM correction, direct sampling (HF),
-bias-T, offset tuning, DC correction, I/Q swap, overload indicator.
+bias-T, offset tuning, DC correction, I/Q swap, overload indicator. SDRplay: 0.25–10 MS/s, LNA state, IF gain or
+IF AGC, low IF (no DC spike, up to 2.048 MS/s) or zero IF with hardware decimation, and depending on the model
+antenna or tuner selection, bias-T and FM/DAB/AM notch filters. The S-meter uses the gain reported by the API.
 
 **Display (Metal):** spectrum with fill, peak hold and max-per-pixel rendering; waterfall with 6 palettes,
 adjustable speed and levels, which shifts correctly when retuning; FFT 1k–64k, averaging, zoom up to ×256,
 auto range. S-meter (S1–S9+60, estimated dBm and dBFS, peak and squelch markers). Light, dark or system theme.
 
-**Recording:** audio (16-bit stereo WAV) and I/Q (8-bit WAV, playable as a file source), saved to
+**Recording:** audio (16-bit stereo WAV) and I/Q (8-bit WAV for RTL-SDR, 16-bit for SDRplay, playable as a file source), saved to
 `~/Music/Kymara Recordings`.
 
 **Favourites:** grouped, filterable, editable.
@@ -65,9 +77,10 @@ Shortcuts: ⌘R start/stop, ⌘1–7 modes, ⌘D add favourite, ⌘=/⌘−/⌘0
 
 ## Architecture
 
-- `Sources/SDRCore` — sources (librtlsdr via `dlopen`, rtl_tcp, file, demo), DSP chain
+- `Sources/SDRCore` — sources (librtlsdr and the SDRplay API via `dlopen`, rtl_tcp, file, demo), DSP chain
   (NCO → decimation to ~240 kHz → channel filter (overlap-save FFT) → demodulation → ~48 kHz audio, plus the RDS decoder on the FM multiplex),
   spectrum analysis, audio output (AVAudioEngine) and recording.
+- `Sources/CSDRplay` — C declarations of the SDRplay API types (no code; the library is loaded at runtime).
 - `Sources/Kymara` — SwiftUI app, `RadioController` (state and settings), Metal renderers, persistence.
 
 The DSP processes 1 s of 2.4 MS/s in ~15–25 ms on Apple silicon.

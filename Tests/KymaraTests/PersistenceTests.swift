@@ -62,6 +62,29 @@ final class PersistenceTests: XCTestCase {
         XCTAssertEqual(s?.gain, RadioSettings().gain)
     }
 
+    func testSDRplaySettingsRoundTripAndOldBlobsDecode() {
+        var s = RadioSettings()
+        s.sourceKind = .sdrplay
+        s.sdrplaySerial = "1234567890"
+        s.sdrplay.lnaState = 2
+        s.sdrplay.ifAGC = false
+        s.sdrplay.ifMode = .zeroIF
+        s.sdrplay.antenna = .hiZ
+        store.saveSettings(s)
+        let loaded = store.loadSettings()
+        XCTAssertEqual(loaded?.sourceKind, .sdrplay)
+        XCTAssertEqual(loaded?.sdrplaySerial, "1234567890")
+        XCTAssertEqual(loaded?.sdrplay, s.sdrplay)
+
+        // Settings from before SDRplay support, and a partly unknown SDRplay blob.
+        storeRawSettings(#"{"vfo": 99400000, "sdrplay": {"lnaState": 1, "antenna": "Z"}}"#)
+        let old = store.loadSettings()
+        XCTAssertEqual(old?.vfo, 99_400_000)
+        XCTAssertEqual(old?.sdrplay.lnaState, 1)
+        XCTAssertEqual(old?.sdrplay.antenna, .a)
+        XCTAssertEqual(old?.sdrplaySerial, "")
+    }
+
     func testCorruptSettingsAreBackedUp() {
         storeRawSettings("this is not json")
         XCTAssertNil(store.loadSettings())
