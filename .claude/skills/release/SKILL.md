@@ -27,7 +27,10 @@ go-ahead.
   there; the pre-release label lives in the tag and file name.
 - `CFBundleVersion` = the current value + 1. Every release gets a higher build number.
 
-Use `/usr/libexec/PlistBuddy -c 'Set :Key value' Resources/Info.plist`.
+Read with `plutil -extract CFBundleVersion raw Resources/Info.plist` and write with
+`plutil -replace <Key> -string <value> Resources/Info.plist`. plutil rewrites the whole file in its canonical format
+(tabs, sorted keys); the file is kept in that format, so `git diff` should only show the changed values. If it shows
+more, the file was hand-edited: commit the reformat separately first.
 
 ## 4. Build and verify the DMG
 
