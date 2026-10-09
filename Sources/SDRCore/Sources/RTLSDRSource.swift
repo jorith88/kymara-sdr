@@ -180,7 +180,7 @@ public final class RTLSDRSource: IQSource, @unchecked Sendable {
     deinit { stop() }
 
     fileprivate func deliver(_ buffer: UnsafeBufferPointer<UInt8>) {
-        handler?(buffer)
+        handler?(.u8(buffer))
     }
 
     public func start(sampleRate: Double, centerFrequency: Double, handler: @escaping IQHandler) throws {
