@@ -119,16 +119,6 @@ struct SourcePanel: View {
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-
-            Button {
-                radio.toggleRunning()
-            } label: {
-                Label(radio.isRunning ? "Stop" : "Start", systemImage: radio.isRunning ? "stop.fill" : "play.fill")
-                    .frame(maxWidth: .infinity)
-            }
-            .controlSize(.regular)
-            .tint(radio.isRunning ? Theme.red : Theme.accent)
-            .buttonStyle(.borderedProminent)
         }
         .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.wav, .data, .item]) { result in
             if case .success(let url) = result {
