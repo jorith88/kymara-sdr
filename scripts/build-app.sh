@@ -13,6 +13,11 @@ cp "$BIN_DIR/Kymara" "$APP/Contents/MacOS/Kymara"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 [ -f Resources/AppIcon.icns ] && cp Resources/AppIcon.icns "$APP/Contents/Resources/"
 
+# Sparkle (in-app updates) is linked as @rpath/Sparkle.framework. ditto keeps the framework's symlinks, and
+# the framework keeps Sparkle's own signature.
+ditto "$BIN_DIR/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
+install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/MacOS/Kymara"
+
 # Bundle librtlsdr and its libusb dependency so the app runs without Homebrew.
 RTL=""
 for p in /opt/homebrew/lib/librtlsdr.0.dylib /usr/local/lib/librtlsdr.0.dylib; do

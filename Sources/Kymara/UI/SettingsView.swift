@@ -3,9 +3,11 @@ import SwiftUI
 /// The standard Settings window (⌘,) for app-wide preferences that are not changed while listening.
 struct SettingsView: View {
     @Environment(RadioController.self) private var radio
+    @Environment(Updater.self) private var updater
 
     var body: some View {
         @Bindable var radio = radio
+        @Bindable var updater = updater
         Form {
             Section {
                 Picker("Appearance", selection: $radio.theme) {
@@ -30,6 +32,21 @@ struct SettingsView: View {
                 }
                 Button("Show in Finder") { radio.showRecordingsInFinder() }
             }
+            Section {
+                Toggle("Automatically check for updates", isOn: $updater.automaticallyChecksForUpdates)
+                Toggle("Include pre-releases", isOn: $updater.includePreReleases)
+                Button("Check for Updates…") { updater.checkForUpdates() }
+                    .disabled(!updater.canCheckForUpdates)
+            } header: {
+                Text("Updates")
+            } footer: {
+                Text(updater.isAvailable
+                     ? "Pre-releases are beta versions that are still being tested."
+                     : "Updates are only available in the installed app.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .disabled(!updater.isAvailable)
         }
         .formStyle(.grouped)
         .frame(width: 460)
