@@ -14,20 +14,20 @@ private extension SIMD4 where Scalar == Float {
 
 /// Colours for the spectrum display, per theme.
 private struct SpectrumColors {
-    let bgTop, bgBottom, outside, grid, passband, passbandEdge, fillTop, fillBottom, peak, trace, hover, vfo, centre: SIMD4<Float>
+    let bgTop, bgBottom, outside, grid, passband, passbandEdge, fillTop, fillBottom, peak, trace, hover, hoverPassband, vfo, centre: SIMD4<Float>
 
     static let dark = SpectrumColors(
         bgTop: .rgba(0.05, 0.08, 0.15), bgBottom: .rgba(0.01, 0.015, 0.03), outside: .rgba(0, 0, 0, 0.45),
         grid: .rgba(0.5, 0.65, 0.85, 0.26), passband: .rgba(0.75, 0.82, 0.95, 0.13), passbandEdge: .rgba(0.8, 0.88, 1, 0.6),
         fillTop: .rgba(0.2, 0.6, 1, 0.6), fillBottom: .rgba(0.05, 0.25, 0.6, 0.08), peak: .rgba(1, 0.75, 0.25, 0.65),
-        trace: .rgba(0.85, 0.95, 1, 1), hover: .rgba(1, 1, 1, 0.35), vfo: .rgba(1, 0.25, 0.2, 0.95),
+        trace: .rgba(0.85, 0.95, 1, 1), hover: .rgba(1, 1, 1, 0.35), hoverPassband: .rgba(1, 1, 1, 0.06), vfo: .rgba(1, 0.25, 0.2, 0.95),
         centre: .rgba(1, 0.8, 0.2, 0.8))
 
     static let light = SpectrumColors(
         bgTop: .rgba(1, 1, 1), bgBottom: .rgba(0.9, 0.92, 0.95), outside: .rgba(0.45, 0.48, 0.52, 0.22),
         grid: .rgba(0.15, 0.25, 0.4, 0.24), passband: .rgba(0, 0.35, 0.8, 0.09), passbandEdge: .rgba(0, 0.35, 0.75, 0.6),
         fillTop: .rgba(0.1, 0.45, 0.9, 0.5), fillBottom: .rgba(0.1, 0.45, 0.9, 0.07), peak: .rgba(0.9, 0.5, 0, 0.75),
-        trace: .rgba(0.03, 0.2, 0.45, 1), hover: .rgba(0, 0, 0, 0.35), vfo: .rgba(0.9, 0.15, 0.12, 0.95),
+        trace: .rgba(0.03, 0.2, 0.45, 1), hover: .rgba(0, 0, 0, 0.35), hoverPassband: .rgba(0, 0, 0, 0.05), vfo: .rgba(0.9, 0.15, 0.12, 0.95),
         centre: .rgba(0.9, 0.55, 0, 0.9))
 }
 
@@ -154,6 +154,17 @@ final class SpectrumRenderer: NSObject, MTKViewDelegate {
             ColorVertex(position: [fx0, -1], color: edge), ColorVertex(position: [fx0, 1], color: edge),
             ColorVertex(position: [fx1, -1], color: edge), ColorVertex(position: [fx1, 1], color: edge),
         ])
+
+        // Passband preview at the hover position.
+        if let preview = r.hoverPassband {
+            let px0 = x(preview.lo), px1 = x(preview.hi)
+            add(.triangleStrip, quad(px0, -1, px1, 1, colors.hoverPassband))
+            let c = colors.hover
+            add(.line, [
+                ColorVertex(position: [px0, -1], color: c), ColorVertex(position: [px0, 1], color: c),
+                ColorVertex(position: [px1, -1], color: c), ColorVertex(position: [px1, 1], color: c),
+            ])
+        }
 
         // Fill under the trace.
         let w = Float(width)
