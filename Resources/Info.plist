@@ -26,5 +26,11 @@
 	<true/>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://raw.githubusercontent.com/jorith88/kymara-sdr/main/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>Oms2jWqI3Kp9IxnTsk8E7iUsPRsDxc2R9yq4AkkGyzw=</string>
 </dict>
 </plist>

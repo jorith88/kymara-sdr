@@ -18,6 +18,13 @@ open "build/Kymara.app"
 
 During development: `swift run -c release Kymara`. Tests: `swift test -c release`.
 
+### Updates
+
+The app updates itself with [Sparkle](https://sparkle-project.org) (**Kymara → Check for Updates…**, or
+automatically). It reads `appcast.xml` from the `main` branch; pre-releases are only offered when **Include
+pre-releases** is on in Settings. Updates installed this way are not quarantined, so macOS only asks for approval
+on the first install.
+
 ### SDRplay receivers
 
 SDRplay RSPs need the official **SDRplay API 3.15 or newer** for macOS, installed from
