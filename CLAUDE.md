@@ -45,6 +45,12 @@ Controls in a `Row` keep a real label (hidden with `.labelsHidden()`) so VoiceOv
 
 **Persistence** (`Persistence.swift`). Settings and favourites live in UserDefaults under separate keys. `RadioSettings` has a hand-written tolerant `init(from:)`: when adding a setting, add the field to `RadioSettings`, a `read(.key, &field)` line there, and the load/save mapping in `RadioController.load()` / `currentSettings()`. Never make decoding of the whole blob depend on a new field.
 
+**Updates** (`Updater.swift`) use Sparkle 2 (SwiftPM binary framework, copied into the bundle by `build-app.sh`).
+The feed is `appcast.xml` on `main` (`SUFeedURL` in Info.plist); `scripts/update-appcast.sh` adds a signed item per
+release, with pre-releases in the `beta` channel (`allowedChannels`, the "Include pre-releases" setting). The EdDSA
+private key is in the login keychain; its public half is `SUPublicEDKey`. Never replace the key: installed copies
+only accept updates signed with it. The updater is off when running unbundled (`swift run`).
+
 **librtlsdr** is loaded with `dlopen` (`RTLSDRLibrary`), looking in the app's Frameworks folder first, then Homebrew. It is not a link-time dependency.
 
 **SDRplay API** (closed source, installed by the user, never bundled) is loaded with `dlopen` from `/usr/local/lib` (`SDRplayLibrary` in `SDRplaySource.swift`), using the struct declarations in `CSDRplay`. The API connection is opened once per process. Settings are written into the API's parameter structs and applied with `sdrplay_api_Update` reason flags (`SDRplayUpdate`); IF mode and RSPduo tuner changes need a restart (`configure` returns true). `SDRplayRatePlan` maps each output rate to ADC rate, IF, IF filter and decimation; `SDRplayModel` holds the per-model LNA tables and options.

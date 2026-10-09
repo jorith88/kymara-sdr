@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sparkle update feed. Updated by scripts/update-appcast.sh during a release; the app reads it from main. -->
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+    <channel>
+        <title>Kymara</title>
+        <link>https://github.com/jorith88/kymara-sdr</link>
+        <!-- items -->
+    </channel>
+</rss>
