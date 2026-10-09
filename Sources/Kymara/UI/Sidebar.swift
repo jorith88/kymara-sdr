@@ -188,19 +188,13 @@ struct ReceiverPanel: View {
                     Toggle("Stereo", isOn: $radio.stereoEnabled)
                         .labelsHidden()
                         .toggleStyle(.switch)
-                    if radio.stereoLocked {
-                        Text("pilot locked").font(.caption2).foregroundStyle(Theme.green)
-                    }
+                    StereoPilotLabel()
                 }
                 Row("RDS") {
                     Toggle("RDS", isOn: $radio.rdsEnabled)
                         .labelsHidden()
                         .toggleStyle(.switch)
-                    if radio.rds.synced {
-                        Text(radio.rds.trimmedProgramService.isEmpty ? "synchronised" : radio.rds.trimmedProgramService)
-                            .font(.caption2)
-                            .foregroundStyle(Theme.green)
-                    }
+                    RDSStatusLabel()
                 }
                 Row("RDS panel") {
                     Toggle("RDS panel", isOn: $radio.showRDSPanel)
@@ -218,11 +212,7 @@ struct ReceiverPanel: View {
                 Toggle("Squelch", isOn: $radio.squelchEnabled)
                     .labelsHidden()
                     .toggleStyle(.switch)
-                Circle()
-                    .fill(radio.squelchOpen ? Theme.green : Theme.red.opacity(0.6))
-                    .frame(width: 8, height: 8)
-                    .accessibilityLabel(radio.squelchOpen ? "Squelch open" : "Squelch closed")
-                    .help(radio.squelchOpen ? "Squelch open" : "Squelch closed")
+                SquelchIndicator()
             }
             if radio.mode == .nfm || radio.mode == .wfm {
                 Row("Auto (FM)") {
@@ -231,17 +221,63 @@ struct ReceiverPanel: View {
                         .toggleStyle(.switch)
                         .disabled(!radio.squelchEnabled)
                         .help("Open on carrier-to-noise ratio instead of signal level")
-                    if let snr = radio.snrDB {
-                        // Padded and monospaced so the row does not resize as the value changes.
-                        Text(String(format: "SNR %3.0f dB", snr))
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                    }
+                    SNRLabel()
                 }
             }
             ValueSlider(label: "Level", value: $radio.squelchLevel, range: -120...0, format: { String(format: "%.0f dBFS", $0) })
                 .disabled(!radio.squelchEnabled || radio.autoSquelchActive)
             ValueSlider(label: "Volume", value: $radio.volume, range: 0...1, format: { String(format: "%.0f %%", $0 * 100) })
+        }
+    }
+}
+
+// Live status readouts in their own views: they change several times a second while listening, and
+// reading them in ReceiverPanel's body would rebuild the whole panel each time (which makes the sidebar
+// stutter while scrolling).
+
+private struct StereoPilotLabel: View {
+    @Environment(RadioController.self) private var radio
+
+    var body: some View {
+        if radio.stereoLocked {
+            Text("pilot locked").font(.caption2).foregroundStyle(Theme.green)
+        }
+    }
+}
+
+private struct RDSStatusLabel: View {
+    @Environment(RadioController.self) private var radio
+
+    var body: some View {
+        if radio.rds.synced {
+            Text(radio.rds.trimmedProgramService.isEmpty ? "synchronised" : radio.rds.trimmedProgramService)
+                .font(.caption2)
+                .foregroundStyle(Theme.green)
+        }
+    }
+}
+
+private struct SquelchIndicator: View {
+    @Environment(RadioController.self) private var radio
+
+    var body: some View {
+        Circle()
+            .fill(radio.squelchOpen ? Theme.green : Theme.red.opacity(0.6))
+            .frame(width: 8, height: 8)
+            .accessibilityLabel(radio.squelchOpen ? "Squelch open" : "Squelch closed")
+            .help(radio.squelchOpen ? "Squelch open" : "Squelch closed")
+    }
+}
+
+private struct SNRLabel: View {
+    @Environment(RadioController.self) private var radio
+
+    var body: some View {
+        if let snr = radio.snrDB {
+            // Padded and monospaced so the row does not resize as the value changes.
+            Text(String(format: "SNR %3.0f dB", snr))
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
         }
     }
 }
