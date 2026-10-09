@@ -47,6 +47,11 @@ more, the file was hand-edited: commit the reformat separately first.
 
 If librtlsdr was not bundled (the build prints a warning), stop: the release would need Homebrew.
 
+Then run `./scripts/check-licenses.sh`. It checks that the bundled-libraries table in `README.md` lists the versions
+of librtlsdr, libusb and Sparkle that the app ships (the GPL requires pointing to the exact librtlsdr source). If it
+reports a mismatch, replace the rows it names in `README.md` with the rows it prints, run it again until it passes,
+and include `README.md` in the release commit (step 7).
+
 ## 5. Release notes
 
 Write them in English to a file in the scratchpad. Base them on `git log <previous tag>..HEAD --format=%s`
@@ -73,7 +78,8 @@ copies accept.
 
 ## 7. Commit, tag, push the tag
 
-- Commit `Resources/Info.plist` and `appcast.xml`: `Release <version>` (no Co-Authored-By trailer).
+- Commit `Resources/Info.plist`, `appcast.xml` and, if step 4 updated it, `README.md`: `Release <version>`
+  (no Co-Authored-By trailer).
 - Create an annotated tag: `git tag -a v<version> -m "Kymara <version>"`.
 - `git push origin v<version>`. Push only the tag for now: installed apps read the appcast from `main`, so `main`
   is pushed after the DMG is downloadable (step 9).

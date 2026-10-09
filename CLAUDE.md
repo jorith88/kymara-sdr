@@ -22,7 +22,8 @@ swift run -c release Kymara                    # run unbundled (uses a separate 
 rtl_sdr -f 99000000 -s 2400000 -g 40 -n 19200000 out.cu8   # record raw IQ from the attached dongle for testing
 ```
 
-`scripts/check-sdrplay-shim.sh` checks `Sources/CSDRplay/include/sdrplay_shim.h` against the installed SDRplay API headers (run after an API upgrade). `scripts/make-icon.swift` regenerates `Resources/AppIcon.icns`. There is no linter. Releases: `/release <version>` (`.claude/skills/release/SKILL.md`) tests, bumps the version, builds the DMG, tags and publishes a GitHub release.
+`scripts/check-sdrplay-shim.sh` checks `Sources/CSDRplay/include/sdrplay_shim.h` against the installed SDRplay API headers (run after an API upgrade). `scripts/check-licenses.sh` checks that the README's bundled-libraries table
+matches the librtlsdr, libusb and Sparkle versions in `build/Kymara.app` (run by `/release`). `scripts/make-icon.swift` regenerates `Resources/AppIcon.icns`. There is no linter. Releases: `/release <version>` (`.claude/skills/release/SKILL.md`) tests, bumps the version, builds the DMG, tags and publishes a GitHub release.
 
 ## Architecture
 
