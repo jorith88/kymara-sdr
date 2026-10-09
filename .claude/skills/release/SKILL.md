@@ -38,24 +38,16 @@ more, the file was hand-edited: commit the reformat separately first.
 
 - `hdiutil verify` reports a VALID checksum.
 - Mount it read-only (`hdiutil attach -nobrowse -readonly`). It must contain `Kymara.app` and an `Applications`
-  symlink, `Contents/Frameworks` must contain `librtlsdr.0.dylib` and `libusb-1.0.0.dylib`, and
-  `codesign -v --deep` must pass. Detach it afterwards.
+  symlink, `Contents/Frameworks` must contain `librtlsdr.0.dylib`, `libusb-1.0.0.dylib` and `Sparkle.framework`,
+  the app's Info.plist must have the new `CFBundleVersion`, and `codesign -v --deep` must pass. Detach it afterwards.
 
 If librtlsdr was not bundled (the build prints a warning), stop: the release would need Homebrew.
 
-## 5. Commit, tag, push
+## 5. Release notes
 
-- Commit the Info.plist change: `Release <version>` (no Co-Authored-By trailer).
-- Create an annotated tag: `git tag -a v<version> -m "Kymara <version>"`.
-- `git push origin main v<version>`. GitHub sometimes returns `Internal Server Error` on push even when its status page
-  is green. If so, retry in the background (every 20 s, a few minutes), then check with `git ls-remote origin`.
-  Push the branch and tag separately if only one went through.
-
-## 6. Release notes
-
-Write them in English to a file in the scratchpad. Base them on `git log <previous tag>..v<version> --format=%s`
+Write them in English to a file in the scratchpad. Base them on `git log <previous tag>..HEAD --format=%s`
 (or the whole history for the first release), grouped into user-facing changes. Leave out internal commits (tests,
-CLAUDE.md, scripts). Always include this install section:
+CLAUDE.md, scripts). Always end with this install section (the update dialog in the app shows the notes without it):
 
 ```markdown
 ## Install
@@ -64,10 +56,28 @@ CLAUDE.md, scripts). Always include this install section:
 2. The app is ad-hoc signed, not notarized. On first launch macOS will block it: right-click Kymara → **Open**, or
    allow it under System Settings → Privacy & Security → **Open Anyway**.
 
+Already installed? Use **Kymara → Check for Updates…**; updates installed from within the app need no approval.
 librtlsdr and libusb are bundled, so Homebrew is not required. Requires Apple silicon and macOS 14 or later.
 ```
 
-## 7. Publish
+## 6. Update the appcast
+
+`./scripts/update-appcast.sh <version> <notes>` signs the DMG with the Sparkle EdDSA key in the login keychain and
+adds an item to `appcast.xml` (versions with `-` go in the `beta` channel). If it reports a missing signing key, stop:
+the key must be restored from its backup (`generate_keys -f <file>`); a new key cannot sign updates that installed
+copies accept.
+
+## 7. Commit, tag, push the tag
+
+- Commit `Resources/Info.plist` and `appcast.xml`: `Release <version>` (no Co-Authored-By trailer).
+- Create an annotated tag: `git tag -a v<version> -m "Kymara <version>"`.
+- `git push origin v<version>`. Push only the tag for now: installed apps read the appcast from `main`, so `main`
+  is pushed after the DMG is downloadable (step 9).
+
+GitHub sometimes returns `Internal Server Error` on push even when its status page is green. If so, retry in the
+background (every 20 s, a few minutes), then check with `git ls-remote origin`.
+
+## 8. Publish
 
 ```bash
 gh release create v<version> build/Kymara-<version>.dmg --verify-tag --title "Kymara <version>" \
@@ -77,6 +87,12 @@ gh release create v<version> build/Kymara-<version>.dmg --verify-tag --title "Ky
 Add `--prerelease` when the version contains `-` (beta, rc, …). Then check
 `gh release view v<version> --json url,isPrerelease,assets` and confirm the asset's state is `uploaded`.
 
-## 8. Report
+## 9. Push main
 
-Report the release URL, the DMG size, the test results and the build number. Also mention any push retries.
+`git push origin main` (same retry rule as step 7). This publishes the appcast, so installed apps see the update.
+Confirm with `curl -sI <enclosure url from appcast.xml>` that the DMG link resolves (HTTP 302 → 200).
+
+## 10. Report
+
+Report the release URL, the DMG size, the test results, the build number and the appcast channel. Also mention any
+push retries.

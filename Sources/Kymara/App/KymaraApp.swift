@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct KymaraApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var radio = RadioController()
+    @State private var updater = Updater()
 
     var body: some Scene {
         Window("Kymara", id: "main") {
@@ -44,6 +45,10 @@ struct KymaraApp: App {
         .defaultSize(width: 1560, height: 940)
         .windowToolbarStyle(.unifiedCompact)
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { updater.checkForUpdates() }
+                    .disabled(!updater.canCheckForUpdates)
+            }
             // Display commands belong in the standard View menu, above Show/Customize Toolbar.
             CommandGroup(before: .toolbar) {
                 Button("Zoom In") { radio.setZoom(radio.zoom * 2) }
@@ -98,6 +103,7 @@ struct KymaraApp: App {
         Settings {
             SettingsView()
                 .environment(radio)
+                .environment(updater)
         }
     }
 }
