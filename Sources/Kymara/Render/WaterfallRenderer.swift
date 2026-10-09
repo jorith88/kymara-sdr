@@ -132,6 +132,12 @@ final class WaterfallRenderer: NSObject, MTKViewDelegate {
         u.filterEnd = Float((r.filterEnd - bandStart) / fs)
         u.vfo = Float((r.vfoFrequency - bandStart) / fs)
         u.light = light ? 1 : 0
+        if let hover = r.hover { u.hover = Float((hover.frequency - bandStart) / fs) }
+        if let preview = r.hoverPassband {
+            u.previewStart = Float((preview.lo - bandStart) / fs)
+            u.previewEnd = Float((preview.hi - bandStart) / fs)
+        }
+        u.scale = Float(scale)
         u.texelsPerPixel = (u.uEnd - u.uStart) * Float(texture.width) / Float(max(1, view.drawableSize.width))
 
         guard let cmd = ctx.queue.makeCommandBuffer(), let enc = cmd.makeRenderCommandEncoder(descriptor: pass) else {
