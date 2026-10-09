@@ -120,6 +120,7 @@ final class WaterfallRenderer: NSObject, MTKViewDelegate {
         shifts.withUnsafeBytes { shiftBuffer.contents().copyMemory(from: $0.baseAddress!, byteCount: $0.count) }
 
         let scale = Double(view.window?.backingScaleFactor ?? 2)
+        r.waterfallPixelWidth = Double(view.drawableSize.width)
         var u = WaterfallUniforms()
         u.newestRow = Float(newestRow)
         u.rows = Float(WaterfallRenderer.rows)

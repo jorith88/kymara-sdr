@@ -141,9 +141,31 @@ struct StatusBar: View {
     }
 }
 
-struct ContentView: View {
+/// The RDS panel over the spectrum. A separate view so that ContentView does not observe `rds`,
+/// which changes several times a second while RDS is decoding.
+private struct RDSOverlayLayer: View {
     @Environment(RadioController.self) private var radio
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        if radio.mode == .wfm && radio.rdsEnabled && radio.showRDSPanel && radio.rds.hasData {
+            GeometryReader { geo in
+                // Keep the panel on the side away from the tuned station.
+                let vfoOnRight = (radio.vfoFrequency - radio.viewStart) / radio.viewSpan > 0.5
+                RDSOverlay(availableHeight: geo.size.height)
+                    .padding(.top, 38)
+                    .padding(.horizontal, 44)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity,
+                           alignment: vfoOnRight ? .topLeading : .topTrailing)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: vfoOnRight)
+            }
+            .allowsHitTesting(false)
+        }
+    }
+}
+
+struct ContentView: View {
+    @Environment(RadioController.self) private var radio
 
     var body: some View {
         @Bindable var radio = radio
@@ -161,19 +183,7 @@ struct ContentView: View {
                             .accessibilityValue("Tuned to \(FrequencyFormat.short(radio.vfoFrequency))")
                             .accessibilityHint("Scroll to tune, drag to pan")
                         SpectrumOverlay()
-                        if radio.mode == .wfm && radio.rdsEnabled && radio.showRDSPanel && radio.rds.hasData {
-                            GeometryReader { geo in
-                                // Keep the panel on the side away from the tuned station.
-                                let vfoOnRight = (radio.vfoFrequency - radio.viewStart) / radio.viewSpan > 0.5
-                                RDSOverlay(availableHeight: geo.size.height)
-                                    .padding(.top, 38)
-                                    .padding(.horizontal, 44)
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity,
-                                           alignment: vfoOnRight ? .topLeading : .topTrailing)
-                                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: vfoOnRight)
-                            }
-                            .allowsHitTesting(false)
-                        }
+                        RDSOverlayLayer()
                     }
                 } bottom: {
                     VStack(spacing: 0) {
