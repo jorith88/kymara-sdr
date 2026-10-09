@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Kymara is a native macOS (Apple silicon, macOS 14+) SDR receiver for RTL-SDR dongles, modelled on SDR Console.
+Kymara is a native macOS (Apple silicon, macOS 14+) SDR receiver for RTL-SDR dongles and SDRplay RSPs, modelled on SDR Console.
 Swift Package, Swift 5 language mode (`swiftLanguageModes: [.v5]`), no Xcode project.
 
 **Language:** the app (all UI text, messages, menus) and all documentation (README, CLAUDE.md, code comments, commit
@@ -15,19 +15,20 @@ swift build -c release                         # build (always use release: DSP 
 swift test -c release                          # all tests (SDRCoreTests + KymaraTests)
 swift test -c release --filter RDSTests        # one test class
 swift test -c release --filter DSPTests/testEngineWFMEndToEnd   # one test
+KYMARA_HARDWARE_TESTS=1 swift test -c release --filter SDRplayTests   # include the test with an attached RSP
 ./scripts/build-app.sh                         # → build/Kymara.app (bundles librtlsdr + libusb, ad-hoc signed)
 ./scripts/make-dmg.sh [version]                # → build/Kymara-<version>.dmg (for GitHub releases)
 swift run -c release Kymara                    # run unbundled (uses a separate UserDefaults domain "Kymara")
 rtl_sdr -f 99000000 -s 2400000 -g 40 -n 19200000 out.cu8   # record raw IQ from the attached dongle for testing
 ```
 
-`scripts/make-icon.swift` regenerates `Resources/AppIcon.icns`. There is no linter. Releases: `/release <version>` (`.claude/skills/release/SKILL.md`) tests, bumps the version, builds the DMG, tags and publishes a GitHub release.
+`scripts/check-sdrplay-shim.sh` checks `Sources/CSDRplay/include/sdrplay_shim.h` against the installed SDRplay API headers (run after an API upgrade). `scripts/make-icon.swift` regenerates `Resources/AppIcon.icns`. There is no linter. Releases: `/release <version>` (`.claude/skills/release/SKILL.md`) tests, bumps the version, builds the DMG, tags and publishes a GitHub release.
 
 ## Architecture
 
-Two modules: **SDRCore** (sources, DSP, audio, recording — no UI) and **Kymara** (SwiftUI app, Metal renderers, persistence).
+Two modules: **SDRCore** (sources, DSP, audio, recording — no UI) and **Kymara** (SwiftUI app, Metal renderers, persistence), plus **CSDRplay** (C declarations of the SDRplay API types only).
 
-**Data flow / threading.** An `IQSource` (`RTLSDRSource`, `RTLTCPSource`, `FileSource`, `DemoSource`) delivers interleaved u8 I/Q on its own thread and calls `DSPEngine.process(_:)` directly. `process` runs under `processLock`, takes a snapshot of `DSPConfig` and rebuilds filters when structural fields change (sample rate, mode → full rebuild; bandwidth → channel filter; FFT size → analyzer). `RadioController` (`@MainActor @Observable`) is the single source of UI state; every setting change calls `pushConfig()` which writes a fresh `DSPConfig`. Results flow back by polling, not callbacks: a 30 Hz timer reads `engine.status` (level, squelch, stereo, `RDSInfo`), and the Metal renderers pull from `SpectrumStore` each frame. Waterfall lines are queued in `SpectrumStore` and drained only by `WaterfallRenderer`.
+**Data flow / threading.** An `IQSource` (`RTLSDRSource`, `SDRplaySource`, `RTLTCPSource`, `FileSource`, `DemoSource`) delivers interleaved I/Q as `IQSamples` (`.u8` for RTL-SDR, `.s16` for SDRplay and 16-bit/float WAV files) on its own thread and calls `DSPEngine.process(_:)` directly. I/Q recordings use the source's `sampleBits`. `process` runs under `processLock`, takes a snapshot of `DSPConfig` and rebuilds filters when structural fields change (sample rate, mode → full rebuild; bandwidth → channel filter; FFT size → analyzer). `RadioController` (`@MainActor @Observable`) is the single source of UI state; every setting change calls `pushConfig()` which writes a fresh `DSPConfig`. Results flow back by polling, not callbacks: a 30 Hz timer reads `engine.status` (level, squelch, stereo, `RDSInfo`), and the Metal renderers pull from `SpectrumStore` each frame. Waterfall lines are queued in `SpectrumStore` and drained only by `WaterfallRenderer`.
 
 **DSP chain** (`DSPEngine.rates(for:)`): u8→float, DC removal, spectrum analyzer tap → NCO mix by `vfoOffset` → stage-1 decimation to ~240 kHz → WFM: channel filter, FM discriminator, RDS decoder on the MPX, `StereoDecoder` (pilot PLL, decimates to audio) → others: stage-2 decimation to ~48 kHz, channel filter (`FFTFilter`, overlap-save, complex taps for SSB), demodulate, auto notch (AM/SSB/DSB: a 1 s averaged FFT finds steady tones, narrow IIR notches remove them without latency), AGC. Audio rate is whatever falls out (48/51.2/… kHz); `AVAudioEngine` resamples. Filter passband edges per mode come from `DemodMode.filterEdges(bandwidth:)`, shared by DSP and the spectrum overlay.
 
@@ -46,10 +47,13 @@ Controls in a `Row` keep a real label (hidden with `.labelsHidden()`) so VoiceOv
 
 **librtlsdr** is loaded with `dlopen` (`RTLSDRLibrary`), looking in the app's Frameworks folder first, then Homebrew. It is not a link-time dependency.
 
+**SDRplay API** (closed source, installed by the user, never bundled) is loaded with `dlopen` from `/usr/local/lib` (`SDRplayLibrary` in `SDRplaySource.swift`), using the struct declarations in `CSDRplay`. The API connection is opened once per process. Settings are written into the API's parameter structs and applied with `sdrplay_api_Update` reason flags (`SDRplayUpdate`); IF mode and RSPduo tuner changes need a restart (`configure` returns true). `SDRplayRatePlan` maps each output rate to ADC rate, IF, IF filter and decimation; `SDRplayModel` holds the per-model LNA tables and options.
+
 ## Gotchas
 
 - Don't pass the same array to a vDSP call as both input and `&output` — it traps at runtime (exclusivity). Use the `inPlace` helper in `ArrayInPlace.swift`.
 - `AudioRingBuffer.read` returns silence *without consuming* until ~80 ms is buffered. A drain loop on a lower threshold never terminates (this once ate 400 GB of RAM in a test).
 - The title bar uses `.windowToolbarStyle(.unifiedCompact)`, where AppKit ignores title-bar double-clicks; `TitleBarDoubleClick.swift` performs the system action instead. Remove it if the toolbar style changes.
 - The terminal has Screen Recording permission: `screencapture -x -o -l <windowID>` grabs the app window (get the ID from `CGWindowListCopyWindowInfo`, owner "Kymara"). Synthetic clicks are untested; to get the app into a state (start the radio, force an appearance), add a temporary env-var hook in `RadioController.init` and remove it before committing.
-- An RTL-SDR is usually attached to this machine; real FM stations with RDS are around 99.4, 101.6 and 102.3 MHz. The demo source has RDS on 100.0 and 101.2 MHz.
+- The SDRplay API service keeps a device claimed for a while when the app is killed instead of quit (a test hook should quit with `NSApp.terminate`), so the next start reports "No SDRplay device found". `SDRplayTests.testStreamsFromAttachedDevice` streams from an attached RSP; it only runs with `KYMARA_HARDWARE_TESTS=1` (and is skipped without a free device).
+- An RTL-SDR and an SDRplay RSP1 are usually attached to this machine; real FM stations with RDS are around 99.4, 101.6 and 102.3 MHz. The demo source has RDS on 100.0 and 101.2 MHz.

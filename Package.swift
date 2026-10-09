@@ -8,7 +8,8 @@ let package = Package(
         .executable(name: "Kymara", targets: ["Kymara"]),
     ],
     targets: [
-        .target(name: "SDRCore", path: "Sources/SDRCore"),
+        .target(name: "CSDRplay", path: "Sources/CSDRplay"),
+        .target(name: "SDRCore", dependencies: ["CSDRplay"], path: "Sources/SDRCore"),
         .executableTarget(name: "Kymara", dependencies: ["SDRCore"], path: "Sources/Kymara"),
         .testTarget(name: "SDRCoreTests", dependencies: ["SDRCore"], path: "Tests/SDRCoreTests"),
         .testTarget(name: "KymaraTests", dependencies: ["Kymara"], path: "Tests/KymaraTests"),
