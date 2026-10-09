@@ -91,3 +91,18 @@ Shortcuts: ⌘R start/stop, ⌘1–7 modes, ⌘D add favourite, ⌘=/⌘−/⌘0
 - `Sources/Kymara` — SwiftUI app, `RadioController` (state and settings), Metal renderers, persistence.
 
 The DSP processes 1 s of 2.4 MS/s in ~15–25 ms on Apple silicon.
+
+## License
+
+Kymara is free software, licensed under the [GNU General Public License v3.0](LICENSE.md).
+Copyright © 2026 Jorith van den Heuvel.
+
+The app bundle includes these libraries, each under its own license:
+
+| Library | Version | License | Source |
+|---|---|---|---|
+| [librtlsdr](https://github.com/steve-m/librtlsdr) | 2.0.3 | GPL-2.0-or-later | [v2.0.3](https://github.com/steve-m/librtlsdr/archive/refs/tags/v2.0.3.tar.gz) |
+| [libusb](https://libusb.info) | 1.0.30 | LGPL-2.1-or-later | [v1.0.30](https://github.com/libusb/libusb/releases/download/v1.0.30/libusb-1.0.30.tar.bz2) |
+| [Sparkle](https://sparkle-project.org) | 2.10.0 | MIT | [2.10.0](https://github.com/sparkle-project/Sparkle/tree/2.10.0) |
+
+The SDRplay API is not bundled; it is installed separately under SDRplay's own license.
