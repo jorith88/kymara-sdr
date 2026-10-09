@@ -5,5 +5,21 @@
         <title>Kymara</title>
         <link>https://github.com/jorith88/kymara-sdr</link>
         <!-- items -->
+        <item>
+            <title>Kymara 1.0.0-beta.3</title>
+            <pubDate>Fri, 09 Oct 2026 11:38:06 +0000</pubDate>
+            <sparkle:version>3</sparkle:version>
+            <sparkle:shortVersionString>1.0.0-beta.3</sparkle:shortVersionString>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>What's new</h2>
+<h3>Automatic updates</h3>
+<ul>
+<li>Kymara now updates itself. Use <strong>Kymara → Check for Updates…</strong>, or let it check automatically. Updates installed from within the app don't need approval in System Settings, so macOS only asks once, on the first install.</li>
+<li>A new <strong>Updates</strong> section in Settings (⌘,) lets you turn automatic checks on or off and choose whether to include pre-releases (beta versions). Pre-releases are off by default.</li>
+</ul>
+<p><strong>Coming from 1.0.0-beta.2 or earlier?</strong> Those versions have no updater, so install this one by hand. If you want to keep receiving beta versions, turn on <strong>Include pre-releases</strong> in Settings afterwards.</p>]]></description>
+            <enclosure url="https://github.com/jorith88/kymara-sdr/releases/download/v1.0.0-beta.3/Kymara-1.0.0-beta.3.dmg" sparkle:edSignature="ai1lcW9t0wX4WJzjlaAzDZGwct6TgCK16EzDLra+TwXZM8LeSSXA1mqaZIu8jIu/XKfAxYPwrlgcMUUELoy6Aw==" length="2515227" type="application/octet-stream"/>
+        </item>
     </channel>
 </rss>
