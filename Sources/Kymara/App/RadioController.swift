@@ -5,6 +5,7 @@ import SDRCore
 
 enum SourceKind: String, CaseIterable, Identifiable, Codable {
     case rtlsdr = "RTL-SDR (USB)"
+    case sdrplay = "SDRplay RSP (USB)"
     case rtltcp = "rtl_tcp (network)"
     case demo = "Demo generator"
     case file = "I/Q file"
@@ -53,6 +54,14 @@ final class RadioController {
     private(set) var sourceName = "Not running"
     var errorMessage: String?
     let libraryPath: String? = RTLSDRSource.libraryPath
+    let sdrplayLibraryPath: String? = SDRplaySource.libraryPath
+    var sdrplayDevices: [SDRplayDeviceInfo] = []
+    var selectedSDRplaySerial = "" { didSet { scheduleSave() } }
+    var sdrplay = SDRplayConfig() { didSet { if sdrplay != oldValue { sdrplayChanged() } } }
+    /// Model of the running or selected SDRplay device.
+    private(set) var sdrplayModel: SDRplayModel?
+    private(set) var lnaStateCount = 4
+    @ObservationIgnored private var sdrplayGainDB: Double?
 
     // MARK: Tuning
     private(set) var vfoFrequency: Double = 100_000_000 {
@@ -169,7 +178,14 @@ final class RadioController {
     var filterEnd: Double { vfoFrequency + filterEdges.hi }
     var audioRate: Double { DSPEngine.rates(for: sampleRate).audioRate }
     var canRetune: Bool { source?.fixedCenterFrequency == nil || !isRunning }
-    var gainDB: Double { gainAuto ? 30 : Double(gain) / 10 }
+    var gainDB: Double {
+        if sourceKind == .sdrplay { return sdrplayGainDB ?? 40 }
+        return gainAuto ? 30 : Double(gain) / 10
+    }
+    /// Sample rates offered for the current source.
+    var sampleRateChoices: [Double] {
+        sourceKind == .sdrplay ? SDRplayRatePlan.outputRates : Self.sampleRates
+    }
     var signalDBm: Double { signalDB - gainDB + meterCalibration }
     var maxBandwidth: Double {
         mode == .wfm ? min(mode.bandwidthRange.upperBound, 0.92 * DSPEngine.rates(for: sampleRate).rate1)
@@ -182,6 +198,25 @@ final class RadioController {
         rtlDevices = RTLSDRSource.listDevices()
         if !rtlDevices.contains(where: { $0.index == selectedDevice }) {
             selectedDevice = rtlDevices.first?.index ?? 0
+        }
+        // Only talk to the SDRplay API service when it is used. A running SDRplay device is not listed
+        // by the API, so keep the list as it is meanwhile.
+        if sourceKind == .sdrplay, !(source is SDRplaySource) {
+            sdrplayDevices = SDRplaySource.listDevices()
+            if !sdrplayDevices.contains(where: { $0.serial == selectedSDRplaySerial }), let first = sdrplayDevices.first {
+                selectedSDRplaySerial = first.serial
+            }
+            updateSDRplayModel()
+        }
+    }
+
+    private func updateSDRplayModel() {
+        if let sp = source as? SDRplaySource {
+            sdrplayModel = sp.model
+            lnaStateCount = sp.lnaStateCount
+        } else if let dev = sdrplayDevices.first(where: { $0.serial == selectedSDRplaySerial }) {
+            sdrplayModel = dev.model
+            lnaStateCount = dev.model.lnaStateCount(frequency: centerFrequency, antenna: sdrplay.antenna)
         }
     }
 
@@ -201,6 +236,14 @@ final class RadioController {
                     throw SourceError.noDevice
                 }
                 src = RTLSDRSource(deviceIndex: dev.index, name: dev.label)
+            case .sdrplay:
+                guard SDRplaySource.isLibraryAvailable else { throw SourceError.sdrplayAPIMissing }
+                refreshDevices()
+                guard let dev = sdrplayDevices.first(where: { $0.serial == selectedSDRplaySerial }) ?? sdrplayDevices.first else {
+                    throw SourceError.noSDRplayDevice
+                }
+                selectedSDRplaySerial = dev.serial
+                src = SDRplaySource(serial: dev.serial, config: sdrplay)
             case .rtltcp:
                 src = RTLTCPSource(host: tcpHost, port: UInt16(clamping: tcpPort))
             case .demo:
@@ -225,11 +268,13 @@ final class RadioController {
                 guard let self, let src, self.source === src else { return }
                 self.gains = src.gains.isEmpty ? self.gains : src.gains
                 self.sourceName = src.displayName
+                self.updateSDRplayModel()
             }
         }
 
         restarting = true
         if let rate = src.fixedSampleRate { sampleRate = rate }
+        if let rates = src.sampleRates { sampleRate = Self.nearest(sampleRate, in: rates) }
         if let center = src.fixedCenterFrequency {
             centerFrequency = center
             if abs(vfoFrequency - center) > sampleRate * 0.45 { vfoFrequency = center + sampleRate / 8 }
@@ -266,6 +311,7 @@ final class RadioController {
             if !gains.contains(gain) { gain = nearestGain(gain) }
         }
         sourceName = src.displayName
+        updateSDRplayModel()
         isRunning = true
         if needsInitialAutoRange {
             needsInitialAutoRange = false
@@ -298,6 +344,20 @@ final class RadioController {
 
     private func sourceChanged() {
         if isRunning { stop() }
+        if sourceKind != .file { sampleRate = Self.nearest(sampleRate, in: sampleRateChoices) }
+        if sourceKind == .sdrplay, !loading { refreshDevices() }
+        scheduleSave()
+    }
+
+    private static func nearest(_ rate: Double, in rates: [Double]) -> Double {
+        rates.min { abs($0 - rate) < abs($1 - rate) } ?? rate
+    }
+
+    private func sdrplayChanged() {
+        if let sp = source as? SDRplaySource {
+            if sp.configure(sdrplay) { restartIfRunning() }
+        }
+        updateSDRplayModel()
         scheduleSave()
     }
 
@@ -481,7 +541,9 @@ final class RadioController {
         let snr = s.snrDB.map { Double($0.rounded()) }
         if snrDB != snr { snrDB = snr }
         if stereoLocked != s.stereoLocked { stereoLocked = s.stereoLocked }
-        if overload != s.overload { overload = s.overload }
+        let isOverloaded = s.overload || (source?.hardwareOverload ?? false)
+        if overload != isOverloaded { overload = isOverloaded }
+        sdrplayGainDB = (source as? SDRplaySource)?.systemGainDB
         meterTick &+= 1
         if meterTick % 5 == 0, s.rds != rds { rds = s.rds }
         if meterTick % 15 == 0 {
@@ -540,7 +602,7 @@ final class RadioController {
         let name = "IQ_\(timestamp())_\(Int(centerFrequency))Hz_\(Int(sampleRate))sps.wav"
         let url = Self.recordingsFolder.appendingPathComponent(name)
         do {
-            try engine.recorder.startIQ(url: url, sampleRate: sampleRate)
+            try engine.recorder.startIQ(url: url, sampleRate: sampleRate, bitsPerSample: source?.sampleBits ?? 8)
             recordingIQ = true
             recordingStart = Date()
         } catch {
@@ -595,11 +657,14 @@ final class RadioController {
         } else {
             s = RadioSettings()
             needsInitialAutoRange = true
-            s.sourceKind = RTLSDRSource.listDevices().isEmpty ? .demo : .rtlsdr
+            s.sourceKind = !RTLSDRSource.listDevices().isEmpty ? .rtlsdr
+                : !SDRplaySource.listDevices().isEmpty ? .sdrplay : .demo
         }
         sourceKind = s.sourceKind
         tcpHost = s.tcpHost
         tcpPort = s.tcpPort
+        selectedSDRplaySerial = s.sdrplaySerial
+        sdrplay = s.sdrplay
         bandwidths = s.bandwidths
         steps = s.steps
         sampleRate = s.sampleRate
@@ -655,6 +720,8 @@ final class RadioController {
         s.sourceKind = sourceKind
         s.tcpHost = tcpHost
         s.tcpPort = tcpPort
+        s.sdrplaySerial = selectedSDRplaySerial
+        s.sdrplay = sdrplay
         s.vfo = vfoFrequency
         s.center = centerFrequency
         s.mode = mode

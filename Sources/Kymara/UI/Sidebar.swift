@@ -61,6 +61,34 @@ struct SourcePanel: View {
                     .controlSize(.small)
                     .help("Rescan USB devices")
                 }
+            case .sdrplay:
+                if radio.sdrplayLibraryPath == nil {
+                    Label("SDRplay API not found. Install version 3.15 or newer.", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(Theme.amber)
+                    Link("Download the SDRplay API", destination: URL(string: "https://www.sdrplay.com/api/")!)
+                        .font(.caption)
+                }
+                HStack {
+                    Picker("Device", selection: $radio.selectedSDRplaySerial) {
+                        if radio.sdrplayDevices.isEmpty {
+                            Text("No device found").tag(radio.selectedSDRplaySerial)
+                        }
+                        ForEach(radio.sdrplayDevices) { Text($0.label).tag($0.serial) }
+                    }
+                    .labelsHidden()
+                    .controlSize(.small)
+                    .disabled(radio.isRunning)
+                    Button {
+                        radio.refreshDevices()
+                    } label: {
+                        Label("Rescan devices", systemImage: "arrow.clockwise")
+                            .labelStyle(.iconOnly)
+                    }
+                    .controlSize(.small)
+                    .disabled(radio.isRunning)
+                    .help("Rescan USB devices")
+                }
             case .rtltcp:
                 Row("Host") {
                     TextField("127.0.0.1", text: $radio.tcpHost)
@@ -236,8 +264,8 @@ struct TunerPanel: View {
         Panel("RF / Tuner", systemImage: "cpu") {
             Row("Sample rate") {
                 Picker("Sample rate", selection: $radio.sampleRate) {
-                    ForEach(RadioController.sampleRates, id: \.self) { Text(String(format: "%.3f MS/s", $0 / 1e6)).tag($0) }
-                    if !RadioController.sampleRates.contains(radio.sampleRate) {
+                    ForEach(radio.sampleRateChoices, id: \.self) { Text(String(format: "%.3f MS/s", $0 / 1e6)).tag($0) }
+                    if !radio.sampleRateChoices.contains(radio.sampleRate) {
                         Text(String(format: "%.3f MS/s", radio.sampleRate / 1e6)).tag(radio.sampleRate)
                     }
                 }
@@ -245,24 +273,10 @@ struct TunerPanel: View {
                 .disabled(radio.sourceKind == .file)
             }
 
-            Row("Tuner AGC") {
-                Toggle("Tuner AGC", isOn: $radio.gainAuto)
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-            }
-            if !radio.gainAuto && !radio.gains.isEmpty {
-                let idx = Binding<Double>(
-                    get: { Double(radio.gains.firstIndex(of: radio.gain) ?? radio.gains.count / 2) },
-                    set: { radio.gain = radio.gains[min(radio.gains.count - 1, max(0, Int($0.rounded())))] }
-                )
-                ValueSlider(label: "RF gain", value: idx, range: 0...Double(max(1, radio.gains.count - 1)), step: 1,
-                            format: { _ in String(format: "%.1f dB", Double(radio.gain) / 10) })
-            }
-            Row("RTL AGC") {
-                Toggle("RTL AGC", isOn: $radio.rtlAGC)
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .help("RTL2832U digital AGC")
+            if radio.sourceKind == .sdrplay {
+                SDRplayControls()
+            } else {
+                RTLGainControls()
             }
             Row("PPM") {
                 Stepper(value: $radio.ppm, in: -200...200) {
@@ -271,27 +285,8 @@ struct TunerPanel: View {
                         .frame(width: 36, alignment: .trailing)
                 }
             }
-            Row("Direct samp.") {
-                Picker("Direct sampling", selection: $radio.directSampling) {
-                    Text("Off").tag(0)
-                    Text("I").tag(1)
-                    Text("Q (HF)").tag(2)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .help("Direct sampling for HF below 24 MHz (RTL-SDR Blog V3: Q branch)")
-            }
-            Row("Bias-T") {
-                Toggle("Bias-T", isOn: $radio.biasTee)
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .help("Powers an LNA through the coax. Only use with compatible hardware.")
-                Spacer()
-                Text("Offset").font(.subheadline).foregroundStyle(.secondary).accessibilityHidden(true)
-                Toggle("Offset tuning", isOn: $radio.offsetTuning)
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .help("Offset tuning (E4000 tuners)")
+            if radio.sourceKind != .sdrplay {
+                RTLTunerControls()
             }
             Row("DC removal") {
                 Toggle("DC removal", isOn: $radio.dcCorrection)
@@ -307,6 +302,157 @@ struct TunerPanel: View {
                         format: { String(format: "%+.0f dB", $0) })
                 .help("Offset applied when converting dBFS to the (estimated) dBm reading of the S-meter")
         }
+    }
+}
+
+/// RTL-SDR tuner gain (also used by rtl_tcp and the demo source).
+private struct RTLGainControls: View {
+    @Environment(RadioController.self) private var radio
+
+    var body: some View {
+        @Bindable var radio = radio
+        Row("Tuner AGC") {
+            Toggle("Tuner AGC", isOn: $radio.gainAuto)
+                .labelsHidden()
+                .toggleStyle(.switch)
+        }
+        if !radio.gainAuto && !radio.gains.isEmpty {
+            let idx = Binding<Double>(
+                get: { Double(radio.gains.firstIndex(of: radio.gain) ?? radio.gains.count / 2) },
+                set: { radio.gain = radio.gains[min(radio.gains.count - 1, max(0, Int($0.rounded())))] }
+            )
+            ValueSlider(label: "RF gain", value: idx, range: 0...Double(max(1, radio.gains.count - 1)), step: 1,
+                        format: { _ in String(format: "%.1f dB", Double(radio.gain) / 10) })
+        }
+        Row("RTL AGC") {
+            Toggle("RTL AGC", isOn: $radio.rtlAGC)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .help("RTL2832U digital AGC")
+        }
+    }
+}
+
+private struct RTLTunerControls: View {
+    @Environment(RadioController.self) private var radio
+
+    var body: some View {
+        @Bindable var radio = radio
+        Row("Direct samp.") {
+            Picker("Direct sampling", selection: $radio.directSampling) {
+                Text("Off").tag(0)
+                Text("I").tag(1)
+                Text("Q (HF)").tag(2)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .help("Direct sampling for HF below 24 MHz (RTL-SDR Blog V3: Q branch)")
+        }
+        Row("Bias-T") {
+            Toggle("Bias-T", isOn: $radio.biasTee)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .help("Powers an LNA through the coax. Only use with compatible hardware.")
+            Spacer()
+            Text("Offset").font(.subheadline).foregroundStyle(.secondary).accessibilityHidden(true)
+            Toggle("Offset tuning", isOn: $radio.offsetTuning)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .help("Offset tuning (E4000 tuners)")
+        }
+    }
+}
+
+/// SDRplay RSP gain, IF mode and model-specific options.
+private struct SDRplayControls: View {
+    @Environment(RadioController.self) private var radio
+
+    var body: some View {
+        @Bindable var radio = radio
+        let model = radio.sdrplayModel ?? .rsp1
+        let lnaMax = max(1, radio.lnaStateCount - 1)
+        // Shown as gain (right = more gain); the API counts LNA states the other way round.
+        let rfGain = Binding<Double>(
+            get: { Double(lnaMax - min(radio.sdrplay.lnaState, lnaMax)) },
+            set: { radio.sdrplay.lnaState = lnaMax - Int($0.rounded()) }
+        )
+        ValueSlider(label: "RF gain", value: rfGain, range: 0...Double(lnaMax), step: 1,
+                    format: { "LNA \(lnaMax - Int($0.rounded()))" })
+            .help("LNA state. LNA 0 is the most gain; lower the gain when strong signals overload the receiver.")
+        Row("IF AGC") {
+            Toggle("IF AGC", isOn: $radio.sdrplay.ifAGC)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .help("Automatic IF gain")
+        }
+        if !radio.sdrplay.ifAGC {
+            let range = SDRplayConfig.ifGainReductionRange
+            let ifGain = Binding<Double>(
+                get: { Double(range.upperBound - radio.sdrplay.ifGainReduction) },
+                set: { radio.sdrplay.ifGainReduction = range.upperBound - Int($0.rounded()) }
+            )
+            ValueSlider(label: "IF gain", value: ifGain, range: 0...Double(range.upperBound - range.lowerBound), step: 1,
+                        format: { String(format: "%.0f dB", $0) })
+                .help("IF gain above the minimum (59 dB gain reduction)")
+        }
+        Row("IF mode") {
+            Picker("IF mode", selection: $radio.sdrplay.ifMode) {
+                ForEach(SDRplayConfig.IFMode.allCases) { Text($0.label).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .help("Low IF keeps the DC spike out of the band; it is available up to 2.048 MS/s. Auto uses it where possible.")
+        }
+        let plan = SDRplayRatePlan.plan(outputRate: radio.sampleRate, ifMode: radio.sdrplay.ifMode)
+        Text(planDescription(plan))
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+        if !model.antennas.isEmpty {
+            Row(model == .rspDuo ? "Tuner" : "Antenna") {
+                Picker("Antenna", selection: $radio.sdrplay.antenna) {
+                    ForEach(model.antennas) { Text($0.label(for: model)).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .help("Hi-Z is the high-impedance port for frequencies below 60 MHz")
+            }
+        }
+        if model.hasBiasT {
+            Row("Bias-T") {
+                Toggle("Bias-T", isOn: $radio.biasTee)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .help(model == .rspDuo
+                          ? "Powers an LNA through the coax on tuner 2. Only use with compatible hardware."
+                          : "Powers an LNA through the coax. Only use with compatible hardware.")
+            }
+        }
+        if model.hasRFNotch || model.hasDABNotch || model.hasAMNotch {
+            Row("Notch") {
+                if model.hasRFNotch {
+                    Toggle("FM", isOn: $radio.sdrplay.rfNotch)
+                        .toggleStyle(.checkbox)
+                        .help("Broadcast FM band notch filter")
+                }
+                if model.hasDABNotch {
+                    Toggle("DAB", isOn: $radio.sdrplay.dabNotch)
+                        .toggleStyle(.checkbox)
+                        .help("DAB band notch filter")
+                }
+                if model.hasAMNotch {
+                    Toggle("AM", isOn: $radio.sdrplay.amNotch)
+                        .toggleStyle(.checkbox)
+                        .help("MW broadcast notch filter (tuner 1)")
+                }
+            }
+        }
+    }
+
+    private func planDescription(_ plan: SDRplayRatePlan) -> String {
+        let fs = String(format: "%g MHz", plan.fsHz / 1e6)
+        let ifText = plan.isLowIF ? String(format: "low IF %g MHz", Double(plan.ifKHz) / 1000) : "zero IF"
+        let dec = plan.decimation > 1 ? ", decimation \(plan.decimation)×" : ""
+        return "ADC \(fs), \(ifText), IF filter \(FrequencyFormat.bandwidth(Double(plan.bwKHz) * 1000))\(dec)"
     }
 }
 

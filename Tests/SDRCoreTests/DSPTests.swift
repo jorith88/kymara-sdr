@@ -35,15 +35,41 @@ final class DSPTests: XCTestCase {
         return out
     }
 
+    private func makeIQ16(sampleRate: Double, seconds: Double, noise: Float = 0.002,
+                          _ signal: (Int, Double) -> (Float, Float)) -> [Int16] {
+        let n = Int(sampleRate * seconds)
+        var out = [Int16](repeating: 0, count: 2 * n)
+        for k in 0..<n {
+            let (i, q) = signal(k, Double(k) / sampleRate)
+            let ni = Float.random(in: -noise...noise), nq = Float.random(in: -noise...noise)
+            out[2 * k] = Int16(max(-32768, min(32767, ((i + ni) * 32768).rounded())))
+            out[2 * k + 1] = Int16(max(-32768, min(32767, ((q + nq) * 32768).rounded())))
+        }
+        return out
+    }
+
     private func runEngine(_ engine: DSPEngine, iq: [UInt8], chunk: Int = 131_072) -> (left: [Float], right: [Float]) {
+        runEngine(engine, count: iq.count, chunk: chunk) { range in
+            iq.withUnsafeBufferPointer { engine.process(.u8(UnsafeBufferPointer(rebasing: $0[range]))) }
+        }
+    }
+
+    private func runEngine(_ engine: DSPEngine, iq: [Int16], chunk: Int = 131_072) -> (left: [Float], right: [Float]) {
+        runEngine(engine, count: iq.count, chunk: chunk) { range in
+            iq.withUnsafeBufferPointer { engine.process(.s16(UnsafeBufferPointer(rebasing: $0[range]))) }
+        }
+    }
+
+    private func runEngine(_ engine: DSPEngine, count: Int, chunk: Int,
+                           feed: (Range<Int>) -> Void) -> (left: [Float], right: [Float]) {
         var l: [Float] = []
         var r: [Float] = []
         var tmpL = [Float](repeating: 0, count: 4096)
         var tmpR = tmpL
         var offset = 0
-        while offset < iq.count {
-            let end = min(iq.count, offset + chunk)
-            iq.withUnsafeBufferPointer { engine.process(UnsafeBufferPointer(rebasing: $0[offset..<end])) }
+        while offset < count {
+            let end = min(count, offset + chunk)
+            feed(offset..<end)
             offset = end
             // Drain like the audio callback would. Stay above the ring's 80 ms priming threshold,
             // below it the ring returns silence without consuming.
@@ -165,6 +191,33 @@ final class DSPTests: XCTestCase {
         XCTAssertEqual(zeroCrossingFrequency(tail, sampleRate: 48_000), 1_000, accuracy: 20)
         XCTAssertEqual(rms(tail), rms(r[(r.count / 2)...]), accuracy: 0.01, "mono signal: L == R")
         XCTAssertGreaterThan(engine.status.levelDB, -15)
+    }
+
+    func testEngineWFMEndToEnd16Bit() {
+        let fs = 2_000_000.0
+        let offset = 250_000.0
+        var phase = 0.0
+        let iq = makeIQ16(sampleRate: fs, seconds: 1.5, noise: 0.0002) { _, t in
+            let m = 0.8 * sin(2 * .pi * 1_000 * t)
+            phase += 2 * .pi * (offset + 75_000 * m) / fs
+            // -40 dBFS carrier: below the 8-bit noise floor's comfort zone, fine at 16 bit.
+            return (Float(0.01 * cos(phase)), Float(0.01 * sin(phase)))
+        }
+        let engine = DSPEngine()
+        var c = DSPConfig()
+        c.sampleRate = fs
+        c.vfoOffset = offset
+        c.mode = .wfm
+        c.bandwidth = 180_000
+        c.volume = 1
+        c.deemphasis = 0
+        engine.config = c
+        let (l, _) = runEngine(engine, iq: iq)
+        XCTAssertGreaterThan(l.count, 40_000)
+        let tail = l[(l.count / 2)...]
+        XCTAssertEqual(Double(rms(tail)), 0.8 * 0.7071, accuracy: 0.08)
+        XCTAssertEqual(zeroCrossingFrequency(tail, sampleRate: DSPEngine.rates(for: fs).audioRate), 1_000, accuracy: 20)
+        XCTAssertEqual(Double(engine.status.levelDB), -40, accuracy: 4)
     }
 
     func testEngineUSBProducesAudioTone() {

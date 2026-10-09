@@ -248,6 +248,10 @@ public final class DSPEngine: @unchecked Sendable {
     // MARK: Processing
 
     public func process(_ bytes: UnsafeBufferPointer<UInt8>) {
+        process(.u8(bytes))
+    }
+
+    public func process(_ samples: IQSamples) {
         processLock.lock()
         defer { processLock.unlock() }
 
@@ -260,18 +264,29 @@ public final class DSPEngine: @unchecked Sendable {
         }
         cfg = c
 
-        recorder.writeIQ(bytes)
+        recorder.writeIQ(samples)
 
-        let n = bytes.count / 2
-        guard n > 0, let base = bytes.baseAddress else { return }
+        let n = samples.count
+        guard n > 0 else { return }
         ensure(&floats, 2 * n)
         ensure(&bufI, n)
         ensure(&bufQ, n)
 
-        // u8 → float in [-1, 1], then deinterleave.
-        vDSP_vfltu8(base, 1, &floats, 1, vDSP_Length(2 * n))
-        var scale: Float = 1 / 127.5
-        var offset: Float = -1
+        // Samples → float in [-1, 1], then deinterleave.
+        var scale: Float
+        var offset: Float
+        switch samples {
+        case .u8(let b):
+            guard let base = b.baseAddress else { return }
+            vDSP_vfltu8(base, 1, &floats, 1, vDSP_Length(2 * n))
+            scale = 1 / 127.5
+            offset = -1
+        case .s16(let b):
+            guard let base = b.baseAddress else { return }
+            vDSP_vflt16(base, 1, &floats, 1, vDSP_Length(2 * n))
+            scale = 1 / 32768
+            offset = 0
+        }
         floats.withUnsafeMutableBufferPointer { f in
             vDSP_vsmsa(f.baseAddress!, 1, &scale, &offset, f.baseAddress!, 1, vDSP_Length(2 * n))
             bufI.withUnsafeMutableBufferPointer { i in
