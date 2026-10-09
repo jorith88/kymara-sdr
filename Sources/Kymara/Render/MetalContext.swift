@@ -43,6 +43,10 @@ struct WaterfallUniforms {
     float vfo;
     float texelsPerPixel;
     float light;
+    float hover;
+    float scale;
+    float previewStart;
+    float previewEnd;
 };
 
 vertex VOut quadVertex(uint vid [[vertex_id]]) {
@@ -92,13 +96,37 @@ fragment float4 waterfallFragment(VOut in [[stage_in]],
     if (x < 0.0 || x > 1.0) {
         c.rgb = u.light > 0.5 ? float3(0.86, 0.87, 0.89) : float3(0.03, 0.035, 0.05);
     }
-    // Passband tint and VFO line.
-    if (xs >= u.filterStart && xs <= u.filterEnd) {
-        c.rgb = u.light > 0.5 ? mix(c.rgb, float3(0.0, 0.2, 0.45), 0.08) : mix(c.rgb, float3(1.0), 0.10);
-    }
+    // Overlays. Lines take whichever of black/white contrasts with the pixel underneath,
+    // so they stay visible on every palette.
     float px = fwidth(xs);
-    if (abs(xs - u.vfo) < px * 0.75) {
-        c.rgb = mix(c.rgb, float3(1.0, 0.25, 0.2), 0.7);
+    float luma = dot(c.rgb, float3(0.299, 0.587, 0.114));
+    float3 contrast = luma > 0.5 ? float3(0.0) : float3(1.0);
+    float lo = min(u.filterStart, u.filterEnd), hi = max(u.filterStart, u.filterEnd);
+    if (xs >= lo && xs <= hi) {
+        c.rgb = u.light > 0.5 ? mix(c.rgb, float3(0.0, 0.25, 0.6), 0.14) : mix(c.rgb, float3(0.75, 0.85, 1.0), 0.16);
+    }
+    // Passband edges, 1 pt wide.
+    float edge = min(abs(xs - lo), abs(xs - hi));
+    if (hi - lo > px * 4.0 && edge < px * u.scale * 0.5) {
+        c.rgb = mix(c.rgb, contrast, 0.6);
+    }
+    // Passband preview at the hover position: light tint and dashed edges.
+    if (u.previewEnd > u.previewStart) {
+        if (xs >= u.previewStart && xs <= u.previewEnd) {
+            c.rgb = mix(c.rgb, u.light > 0.5 ? float3(0.0) : float3(1.0), 0.07);
+        }
+        float pedge = min(abs(xs - u.previewStart), abs(xs - u.previewEnd));
+        if (pedge < px * u.scale * 0.5 && fmod(in.position.y, 8.0 * u.scale) < 4.0 * u.scale) {
+            c.rgb = mix(c.rgb, contrast, 0.5);
+        }
+    }
+    // Hover cursor: dashed, so it can't be mistaken for the VFO.
+    if (u.hover > -1000.0 && abs(xs - u.hover) < px * u.scale * 0.5 && fmod(in.position.y, 8.0 * u.scale) < 4.0 * u.scale) {
+        c.rgb = mix(c.rgb, contrast, 0.75);
+    }
+    // VFO line, 2 pt wide.
+    if (abs(xs - u.vfo) < px * u.scale) {
+        c.rgb = mix(c.rgb, float3(1.0, 0.25, 0.2), 0.9);
     }
     return c;
 }
@@ -122,6 +150,13 @@ struct WaterfallUniforms {
     var vfo: Float = 0
     var texelsPerPixel: Float = 1
     var light: Float = 0
+    /// Hover frequency as a fraction of the band, or -1e6 when the mouse is outside the displays.
+    var hover: Float = -1e6
+    /// Backing scale factor, so overlay lines have a fixed width in points.
+    var scale: Float = 2
+    /// Passband preview at the hover position (fractions of the band); empty when start > end.
+    var previewStart: Float = 1
+    var previewEnd: Float = 0
 }
 
 @MainActor
