@@ -42,6 +42,8 @@ final class RadioController {
     @ObservationIgnored private var restarting = false
     @ObservationIgnored private var meterTick = 0
     @ObservationIgnored private var needsInitialAutoRange = false
+    /// Width of the waterfall in drawable pixels, set by `WaterfallRenderer` (for auto range).
+    @ObservationIgnored var waterfallPixelWidth: Double = 1600
 
     // MARK: Source
     var sourceKind: SourceKind = .demo { didSet { if sourceKind != oldValue { sourceChanged() } } }
@@ -502,9 +504,38 @@ final class RadioController {
             let top = Double(sorted[sorted.count - 1 - sorted.count / 500])
             spectrumBottom = (noise - 15).rounded()
             spectrumTop = max(spectrumBottom + 30, (top + 10).rounded())
-            waterfallMin = (noise - 3).rounded()
-            waterfallMax = max(waterfallMin + 20, (noise + 0.6 * (top - noise)).rounded())
         }
+        autoRangeWaterfall()
+    }
+
+    /// Sets the waterfall levels from what it actually shows: raw (unaveraged) lines over the visible
+    /// span, reduced to the maximum per pixel like the shader does. Both lift the noise well above the
+    /// averaged spectrum's floor.
+    private func autoRangeWaterfall() {
+        let lines = engine.spectrum.recentLines()
+        guard let count = lines.last?.count, count > 16 else { return }
+        let bandStart = centerFrequency - sampleRate / 2
+        let lo = max(0, Int((viewStart - bandStart) / sampleRate * Double(count)))
+        let hi = min(count, Int((viewEnd - bandStart) / sampleRate * Double(count)))
+        let group = max(1, Int((Double(hi - lo) / max(waterfallPixelWidth, 1)).rounded()))
+        var pixels: [Float] = []
+        pixels.reserveCapacity(lines.count * (hi - lo) / group)
+        for line in lines where line.count == count {
+            var i = lo
+            while i + group <= hi {
+                var m = line[i]
+                for j in i + 1 ..< i + group where line[j] > m { m = line[j] }
+                pixels.append(m)
+                i += group
+            }
+        }
+        guard pixels.count > 16 else { return }
+        pixels.sort()
+        let noise = Double(pixels[pixels.count / 5])
+        let top = Double(pixels[pixels.count - 1 - pixels.count / 1000])
+        // The noise floor lands low in the palette (dark, still textured); the strongest signal near the top.
+        waterfallMin = (noise - 6).rounded()
+        waterfallMax = max(waterfallMin + 35, (top + 3).rounded())
     }
 
     // MARK: - Config / meter

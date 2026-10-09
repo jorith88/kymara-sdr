@@ -107,6 +107,8 @@ public final class SpectrumStore: @unchecked Sendable {
     private var peak: [Float] = []
     private var version = 0
     private var lines: [[Float]] = []
+    /// The latest waterfall lines, kept after the renderer drains them (for auto range).
+    private var recent: [[Float]] = []
 
     public init() {}
 
@@ -122,6 +124,8 @@ public final class SpectrumStore: @unchecked Sendable {
         lock.lock()
         lines.append(line)
         if lines.count > 512 { lines.removeFirst(lines.count - 512) }
+        recent.append(line)
+        if recent.count > 16 { recent.removeFirst(recent.count - 16) }
         lock.unlock()
     }
 
@@ -130,6 +134,7 @@ public final class SpectrumStore: @unchecked Sendable {
         spectrum = []
         peak = []
         lines = []
+        recent = []
         version &+= 1
         lock.unlock()
     }
@@ -139,6 +144,12 @@ public final class SpectrumStore: @unchecked Sendable {
         let s = spectrum, p = peak, v = version
         lock.unlock()
         return body(s, p, v)
+    }
+
+    public func recentLines() -> [[Float]] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recent
     }
 
     public func drainLines() -> [[Float]] {
