@@ -6,6 +6,21 @@
         <link>https://github.com/jorith88/kymara-sdr</link>
         <!-- items -->
         <item>
+            <title>Kymara 1.0.0-beta.4</title>
+            <pubDate>Fri, 09 Oct 2026 19:32:32 +0000</pubDate>
+            <sparkle:version>4</sparkle:version>
+            <sparkle:shortVersionString>1.0.0-beta.4</sparkle:shortVersionString>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>Changes</h2>
+<ul>
+<li><strong>Waterfall auto range</strong> now sets the levels from the waterfall lines as they are actually drawn, not from the averaged spectrum. The noise floor stays dark and strong stations no longer saturate.</li>
+<li><strong>Smoother sidebar:</strong> live readouts (RDS, SNR, squelch, stereo pilot) no longer redraw the whole sidebar and window several times a second, so scrolling the sidebar while listening no longer stutters.</li>
+<li><strong>License:</strong> Kymara is now licensed under GPL-3.0. The README lists the bundled libraries (librtlsdr, libusb, Sparkle) with their versions and licenses.</li>
+</ul>]]></description>
+            <enclosure url="https://github.com/jorith88/kymara-sdr/releases/download/v1.0.0-beta.4/Kymara-1.0.0-beta.4.dmg" sparkle:edSignature="96Tf7hjDRhVBpe4VoxGVMls1XClbfoIyoH05krUDjqAwWXwzsEut3QamAMGBn7hyf1q+fH+dExWiHPyRsbV6CA==" length="2510790" type="application/octet-stream"/>
+        </item>
+        <item>
             <title>Kymara 1.0.0-beta.3</title>
             <pubDate>Fri, 09 Oct 2026 11:38:06 +0000</pubDate>
             <sparkle:version>3</sparkle:version>
