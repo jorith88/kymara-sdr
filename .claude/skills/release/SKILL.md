@@ -14,7 +14,11 @@ go-ahead.
 - The version must be semver without a leading `v` (`1.2.3` or `1.2.3-beta.1`). If `$ARGUMENTS` is empty or invalid,
   ask for the version and stop.
 - The tag is `v<version>`. Stop if it already exists locally (`git tag -l`) or on GitHub (`gh release view`).
-- The tree must be clean and on `main`, up to date with `origin/main` (`git fetch` first).
+- A release is always made from `main`, freshly pulled. The working tree must be clean (stop if not; never stash
+  or discard someone's changes). Switch to `main` if needed (`git switch main`) and run `git pull --ff-only origin
+  main`. Stop if the pull fails or if `main` has commits that are not on `origin/main` (`git rev-list
+  origin/main..main` is not empty): everything in a release must already be on GitHub's `main`, e.g. merged from
+  `develop` via a PR.
 
 ## 2. Test
 
