@@ -45,21 +45,6 @@ struct SpectrumOverlay: View {
                     .fixedSize()
                     .position(x: min(max(vx, 50), w - 50), y: 10)
 
-                // Hover readout.
-                if let hover = radio.hover {
-                    let hx = (hover.frequency - start) / span * w
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(FrequencyFormat.short(hover.frequency))
-                        if let db = hover.db { Text(String(format: "%.1f dB", db)) }
-                    }
-                    .font(.system(size: 10, design: .monospaced))
-                    .padding(4)
-                    .background(.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 3))
-                    .foregroundStyle(.white)
-                    .fixedSize()
-                    .position(x: hx + (hx > w - 110 ? -55 : 55), y: 36)
-                }
-
                 // Zoom indicator.
                 if radio.zoom > 1.01 {
                     Text(String(format: "Zoom ×%.1f · span %@", radio.zoom, FrequencyFormat.bandwidth(span)))
