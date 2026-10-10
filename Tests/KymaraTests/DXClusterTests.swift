@@ -244,6 +244,79 @@ final class DXClusterTests: XCTestCase {
         XCTAssertEqual(calls(), ["JA1XX", "OH0Z"])
     }
 
+    // MARK: Persistence and pausing
+
+    /// The suite PersistenceTests uses too; tests run one at a time.
+    private func cleanDefaults() -> UserDefaults {
+        let defaults = UserDefaults(suiteName: "KymaraTests")!
+        defaults.removePersistentDomain(forName: "KymaraTests")
+        return defaults
+    }
+
+    @MainActor
+    func testSettingsAreSavedAndRestored() async throws {
+        let defaults = cleanDefaults()
+        defer { defaults.removePersistentDomain(forName: "KymaraTests") }
+        let persistence = SettingsStore(defaults: defaults)
+
+        let first = DXClusterStore(provider: FakeProvider(), persistence: persistence)
+        XCTAssertFalse(first.isEnabled, "off on first run")
+        first.refreshInterval = 120
+        first.maxAge = 3_600
+        first.continents = ["EU", "NA"]
+        first.scope = .tuner
+        first.categories = [.cw]
+        first.isPaused = true   // not polling, so the test makes no requests
+        first.isEnabled = true
+
+        let provider = FakeProvider()
+        let second = DXClusterStore(provider: provider, persistence: persistence)
+        XCTAssertEqual(second.settings, first.settings)
+        XCTAssertTrue(second.isEnabled)
+        XCTAssertEqual(second.continents, ["EU", "NA"])
+        XCTAssertEqual(second.categories, [.cw])
+        // An enabled store starts polling as soon as it is loaded.
+        for _ in 0..<100 where provider.calls == 0 { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(provider.calls, 1)
+        XCTAssertEqual(provider.lastContinents, ["EU", "NA"])
+        second.isEnabled = false
+    }
+
+    func testSettingsDecodingIsTolerant() throws {
+        let json = #"{"enabled": true, "maxAge": "long", "scope": "Everywhere", "categories": ["CW", "Morse", "Digital"]}"#
+        let s = try JSONDecoder().decode(DXClusterSettings.self, from: Data(json.utf8))
+        XCTAssertTrue(s.enabled)
+        XCTAssertEqual(s.maxAge, DXClusterSettings().maxAge)
+        XCTAssertEqual(s.scope, .all)
+        XCTAssertEqual(s.categories, [.cw, .digital])
+        XCTAssertEqual(s.refreshInterval, 60)
+    }
+
+    @MainActor
+    func testUnknownContinentsAreDropped() {
+        let store = DXClusterStore(provider: FakeProvider())
+        store.settings = DXClusterSettings(continents: ["EU", "XX"])
+        XCTAssertEqual(store.continents, ["EU"])
+    }
+
+    @MainActor
+    func testPausingStopsPollingAndKeepsSpots() async throws {
+        let provider = FakeProvider()
+        provider.result = .success([spot("DL1AA", 14_025_000, Date())])
+        let store = DXClusterStore(provider: provider)
+        store.isEnabled = true
+        for _ in 0..<100 where store.spots.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(provider.calls, 1)
+
+        store.isPaused = true
+        XCTAssertEqual(store.spots.count, 1, "pausing keeps the spots")
+        // Resuming within the refresh interval waits for the next poll instead of fetching at once.
+        store.isPaused = false
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(provider.calls, 1)
+        store.isEnabled = false
+    }
+
     @MainActor
     func testRefreshIntervalHasAMinimum() {
         let store = DXClusterStore(provider: FakeProvider())

@@ -24,7 +24,7 @@ struct KymaraApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var radio = RadioController()
     @State private var updater = Updater()
-    @State private var dxCluster = DXClusterStore()
+    @State private var dxCluster = DXClusterStore(persistence: SettingsStore())
 
     var body: some Scene {
         Window("Kymara", id: "main") {
@@ -109,6 +109,7 @@ struct KymaraApp: App {
             SettingsView()
                 .environment(radio)
                 .environment(updater)
+                .environment(dxCluster)
         }
     }
 }

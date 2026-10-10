@@ -18,30 +18,75 @@ final class DXClusterStore {
     private(set) var lastError: String?
     private(set) var isFetching = false
 
-    var isEnabled = false { didSet { if isEnabled != oldValue { restartPolling() } } }
-    /// Seconds between polls; never less than `minimumInterval`.
-    var refreshInterval: TimeInterval = 60
-    /// Spots whose last report is older than this are dropped.
-    var maxAge: TimeInterval = 30 * 60 { didSet { prune() } }
-    /// DX continents to show; empty means all.
-    var continents: Set<String> = [] {
-        didSet { if continents != oldValue { spots = []; restartPolling() } }
+    var isEnabled = false {
+        didSet {
+            guard isEnabled != oldValue else { return }
+            if !isEnabled { clear() }
+            restartPolling()
+            save()
+        }
     }
+    /// Seconds between polls; never less than `minimumInterval`.
+    var refreshInterval: TimeInterval = 60 { didSet { save() } }
+    /// Spots whose last report is older than this are dropped.
+    var maxAge: TimeInterval = 30 * 60 { didSet { prune(); save() } }
+    /// DX continents to show; empty means all. The provider filters on these, so a change refetches.
+    var continents: Set<String> = [] {
+        didSet {
+            guard continents != oldValue else { return }
+            clear()
+            restartPolling()
+            save()
+        }
+    }
+    /// Set while no Kymara window is visible: polling stops, the spots stay.
+    var isPaused = false { didSet { if isPaused != oldValue { restartPolling() } } }
 
     // List filters, applied locally.
-    var scope: DXSpotScope = .all
+    var scope: DXSpotScope = .all { didSet { save() } }
     /// Spot categories to show; empty means all.
-    var categories: Set<DXSpotCategory> = []
+    var categories: Set<DXSpotCategory> = [] { didSet { save() } }
 
     @ObservationIgnored let provider: SpotProvider
     @ObservationIgnored private let now: () -> Date
+    @ObservationIgnored private let persistence: SettingsStore?
+    @ObservationIgnored private var loading = false
     @ObservationIgnored private var pollTask: Task<Void, Never>?
     @ObservationIgnored private(set) var consecutiveFailures = 0
     @ObservationIgnored private var generation = 0
 
-    init(provider: SpotProvider = DXHeatProvider(), now: @escaping () -> Date = Date.init) {
+    /// With `persistence`, the settings are loaded from it (which starts polling if enabled) and saved on change.
+    init(provider: SpotProvider = DXHeatProvider(), persistence: SettingsStore? = nil,
+         now: @escaping () -> Date = Date.init) {
         self.provider = provider
         self.now = now
+        self.persistence = persistence
+        if let saved = persistence?.loadDXCluster() {
+            loading = true
+            settings = saved
+            loading = false
+        }
+    }
+
+    var settings: DXClusterSettings {
+        get {
+            DXClusterSettings(enabled: isEnabled, refreshInterval: refreshInterval, maxAge: maxAge,
+                              continents: continents.sorted(), scope: scope,
+                              categories: DXSpotCategory.allCases.filter(categories.contains))
+        }
+        set {
+            refreshInterval = newValue.refreshInterval
+            maxAge = newValue.maxAge
+            continents = Set(newValue.continents).intersection(Self.continents)
+            scope = newValue.scope
+            categories = Set(newValue.categories)
+            isEnabled = newValue.enabled
+        }
+    }
+
+    private func save() {
+        guard !loading else { return }
+        persistence?.saveDXCluster(settings)
     }
 
     var providerName: String { provider.name }
@@ -129,19 +174,25 @@ final class DXClusterStore {
             .sorted { $0.time != $1.time ? $0.time > $1.time : $0.frequency < $1.frequency }
     }
 
+    private func clear() {
+        consecutiveFailures = 0
+        spots = []
+        lastError = nil
+        lastUpdate = nil
+    }
+
+    /// Stops any poll in flight and, when enabled and not paused, starts polling again: at once after
+    /// a restart, or when the next poll is due after a pause.
     private func restartPolling() {
         pollTask?.cancel()
         pollTask = nil
         generation += 1
         isFetching = false
-        consecutiveFailures = 0
-        guard isEnabled else {
-            spots = []
-            lastError = nil
-            lastUpdate = nil
-            return
-        }
+        guard isEnabled, !isPaused else { return }
+        prune()
+        let wait = lastUpdate.map { max(0, $0.addingTimeInterval(nextDelay).timeIntervalSince(now())) } ?? 0
         pollTask = Task { [weak self] in
+            if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
             while !Task.isCancelled {
                 guard let delay = await self?.pollOnce() else { return }
                 try? await Task.sleep(for: .seconds(delay))

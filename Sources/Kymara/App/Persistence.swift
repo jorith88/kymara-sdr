@@ -149,6 +149,32 @@ extension KeyedDecodingContainer {
     }
 }
 
+/// Persisted DX cluster settings, under their own key.
+struct DXClusterSettings: Codable, Equatable {
+    var enabled = false
+    var refreshInterval: TimeInterval = 60
+    var maxAge: TimeInterval = 30 * 60
+    var continents: [String] = []
+    var scope: DXSpotScope = .all
+    var categories: [DXSpotCategory] = []
+}
+
+extension DXClusterSettings {
+    /// Tolerant like `RadioSettings`: a missing or unreadable field keeps its default.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func read<T: Decodable>(_ key: CodingKeys, _ value: inout T) {
+            if let v = c.lenient(T.self, key) { value = v }
+        }
+        read(.enabled, &enabled)
+        read(.refreshInterval, &refreshInterval)
+        read(.maxAge, &maxAge)
+        read(.continents, &continents)
+        read(.scope, &scope)
+        categories = c.lenient(LossyArray<DXSpotCategory>.self, .categories)?.elements ?? []
+    }
+}
+
 /// Decodes an array, skipping elements that fail instead of failing the whole array.
 struct LossyArray<Element: Decodable>: Decodable {
     var elements: [Element]
@@ -174,6 +200,7 @@ struct LossyArray<Element: Decodable>: Decodable {
 struct SettingsStore {
     static let settingsKey = "RadioSettings.v1"
     static let bookmarksKey = "Bookmarks.v1"
+    static let dxClusterKey = "DXCluster.v1"
 
     var defaults: UserDefaults = .standard
 
@@ -206,6 +233,19 @@ struct SettingsStore {
     func saveBookmarks(_ bookmarks: [Bookmark]) {
         if let data = try? JSONEncoder().encode(bookmarks) {
             defaults.set(data, forKey: Self.bookmarksKey)
+        }
+    }
+
+    func loadDXCluster() -> DXClusterSettings? {
+        guard let data = defaults.data(forKey: Self.dxClusterKey) else { return nil }
+        if let s = try? JSONDecoder().decode(DXClusterSettings.self, from: data) { return s }
+        backup(data, key: Self.dxClusterKey)
+        return nil
+    }
+
+    func saveDXCluster(_ settings: DXClusterSettings) {
+        if let data = try? JSONEncoder().encode(settings) {
+            defaults.set(data, forKey: Self.dxClusterKey)
         }
     }
 

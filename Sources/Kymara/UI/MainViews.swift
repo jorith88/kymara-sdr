@@ -101,6 +101,7 @@ struct WaterfallOverlay: View {
 
 struct StatusBar: View {
     @Environment(RadioController.self) private var radio
+    @Environment(DXClusterStore.self) private var cluster
 
     var body: some View {
         HStack(spacing: 16) {
@@ -119,6 +120,7 @@ struct StatusBar: View {
                 item("Audio", String(format: "%.1f kHz · %.0f ms", radio.audioRate / 1e3, radio.audioLatency * 1000))
             }
             item("RBW", String(format: "%.1f Hz", radio.sampleRate / Double(radio.fftSize)))
+            if cluster.isEnabled { DXClusterStatus() }
             Spacer()
             Text("Scroll: tune · ⌘/⌥ scroll or pinch: zoom · drag: pan/LO · ⌥: fine")
                 .foregroundStyle(.tertiary)
@@ -205,6 +207,8 @@ struct ContentView: View {
             StatusBar()
         }
         .background(Theme.window)
+        // Polling for DX spots stops while nobody can see them.
+        .background(WindowVisibilityReader { cluster.isPaused = !$0 })
         // Identified items make the toolbar user-customizable (View > Customize Toolbar…).
         .toolbar(id: "main") {
             ToolbarItem(id: "zoomOut", placement: .primaryAction) {
@@ -251,5 +255,34 @@ struct ContentView: View {
         } message: {
             Text(radio.errorMessage ?? "")
         }
+    }
+}
+
+/// DX cluster state in the status bar: spot count, or why there are no new spots.
+private struct DXClusterStatus: View {
+    @Environment(DXClusterStore.self) private var cluster
+
+    private var state: (color: Color, text: String) {
+        if cluster.isPaused { return (.gray, "paused") }
+        if cluster.lastError != nil { return (Theme.amber, cluster.spots.isEmpty ? "offline" : "\(cluster.spots.count) spots, offline") }
+        if cluster.lastUpdate == nil { return (.gray, "connecting") }
+        return (Theme.green, "\(cluster.spots.count) spots")
+    }
+
+    var body: some View {
+        let state = state
+        HStack(spacing: 4) {
+            Circle()
+                .fill(state.color)
+                .frame(width: 7, height: 7)
+                .accessibilityHidden(true)
+            Text("DX").foregroundStyle(.tertiary)
+            Text(state.text)
+        }
+        .help(cluster.lastError ?? "Spots from \(cluster.providerName).com"
+              + (cluster.lastUpdate.map { ", updated \($0.formatted(date: .omitted, time: .shortened))" } ?? ""))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("DX cluster")
+        .accessibilityValue(state.text)
     }
 }
