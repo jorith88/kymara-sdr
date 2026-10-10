@@ -6,6 +6,31 @@
         <link>https://github.com/jorith88/kymara-sdr</link>
         <!-- items -->
         <item>
+            <title>Kymara 1.0.0-beta.5</title>
+            <pubDate>Sat, 10 Oct 2026 07:41:21 +0000</pubDate>
+            <sparkle:version>5</sparkle:version>
+            <sparkle:shortVersionString>1.0.0-beta.5</sparkle:shortVersionString>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>DX cluster</h2>
+<p>Kymara can now show live amateur radio spots from <a href="https://dxheat.com" rel="nofollow">DXHeat.com</a>. It is off by default: turn it on in the new <strong>DX Spots</strong> tab, under <strong>View → DX Cluster</strong>, or in Settings.</p>
+<ul>
+<li><strong>Spot list</strong> in a tab beside Favourites (<strong>View → Show DX Spots</strong>, ⌥⌘X): callsign, flag, UTC time, frequency, mode, continent and comment, with a coloured stripe for CW, phone or digital. Click a spot, or move through the list with the arrow keys, to tune to it in its mode. Right-click to add a spot to your favourites, copy the callsign or look it up on DXHeat.</li>
+<li><strong>Labels on the spectrum</strong> for the spots in view, coloured by mode and fading with age (<strong>View → Show DX Spot Labels</strong>, ⇧⌘L). Click a label to tune to it. With Differentiate Without Color on in the system settings, labels also name the mode.</li>
+<li><strong>Filters</strong> by range (all spots, tuner range or visible span), mode, DX continent and text. They apply to both the list and the labels.</li>
+<li><strong>Modes:</strong> CW as reported; digital modes such as FT8 and RTTY in USB, including spots on the standard FT8/FT4 frequencies; SSB as reported or by the usual sideband convention.</li>
+<li>Kymara checks for new spots every minute (adjustable in Settings) and only while its window is visible. The status bar shows the number of spots or why they are not updating.</li>
+</ul>
+<h2>Other changes</h2>
+<ul>
+<li>Recalling a favourite or tuning to a spot no longer re-centres a zoomed view when the frequency is already in view.</li>
+<li>The frequency under the cursor is now shown at the top of the waterfall, also when hovering over the spectrum; the readout on the spectrum itself is gone.</li>
+<li>In the favourites list, the selected row is the favourite you are tuned to, and the arrow keys move between favourites.</li>
+<li>The toolbar button that shows favourites is now called <strong>Side Panel</strong>, as it also holds the DX spots. <strong>View → Show Favourites</strong> (⌥⌘B) opens it on the Favourites tab.</li>
+</ul>]]></description>
+            <enclosure url="https://github.com/jorith88/kymara-sdr/releases/download/v1.0.0-beta.5/Kymara-1.0.0-beta.5.dmg" sparkle:edSignature="06ksCakWdDg/QjRYmsPmS59XT7w/njbe6q4EwIu8lfMfIDtTWKrApWy+AAMHjjr2l3vpsaGxEQw2ZLe56QFwAQ==" length="2695715" type="application/octet-stream"/>
+        </item>
+        <item>
             <title>Kymara 1.0.0-beta.4</title>
             <pubDate>Fri, 09 Oct 2026 19:32:32 +0000</pubDate>
             <sparkle:version>4</sparkle:version>

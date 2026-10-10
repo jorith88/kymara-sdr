@@ -2,14 +2,37 @@ import Foundation
 import AVFoundation
 
 /// Plays the demodulated audio through the default output device.
+///
+/// When the output device changes (another default device, AirPlay, headphones), AVAudioEngine
+/// stops itself and posts `AVAudioEngineConfigurationChange`; playback is then restarted on the new device.
 public final class AudioOutput {
     private let engine = AVAudioEngine()
     private var sourceNode: AVAudioSourceNode?
+    private var configObserver: NSObjectProtocol?
     public let ring: AudioRingBuffer
     public private(set) var sampleRate: Double = 0
 
     public init(ring: AudioRingBuffer) {
         self.ring = ring
+        configObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
+        ) { [weak self] _ in
+            self?.restartAfterConfigurationChange()
+        }
+    }
+
+    deinit {
+        if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
+    }
+
+    private func restartAfterConfigurationChange() {
+        // Only restart when playback is meant to be running (stop() clears sourceNode).
+        guard sourceNode != nil, !engine.isRunning else { return }
+        do {
+            try start(sampleRate: sampleRate)
+        } catch {
+            NSLog("Kymara: restarting audio after a device change failed: \(error)")
+        }
     }
 
     public func start(sampleRate: Double) throws {
