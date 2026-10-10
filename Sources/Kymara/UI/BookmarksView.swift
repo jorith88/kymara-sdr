@@ -3,7 +3,6 @@ import SDRCore
 
 struct BookmarksView: View {
     @Environment(RadioController.self) private var radio
-    @State private var selection: Bookmark.ID?
     @State private var filter = ""
     @State private var editing: Bookmark?
 
@@ -20,14 +19,8 @@ struct BookmarksView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Image(systemName: "star.fill")
-                    .foregroundStyle(Theme.amber)
-                    .accessibilityHidden(true)
-                Text("Favourites")
-                    .font(.subheadline.weight(.semibold))
-                    .accessibilityAddTraits(.isHeader)
-                Spacer()
+            HStack(spacing: 4) {
+                SearchField(text: $filter, prompt: "Filter")
                 Button {
                     radio.addBookmark()
                 } label: {
@@ -39,22 +32,16 @@ struct BookmarksView: View {
                 .buttonStyle(.borderless)
                 .help("Add the current frequency to favourites (⌘D)")
             }
-            .padding(.horizontal, 10)
-            .frame(minHeight: 32)
-            .background(Theme.panelHeader)
+            .padding(6)
 
-            SearchField(text: $filter, prompt: "Filter")
-                .padding(6)
-
-            List(selection: $selection) {
+            List(selection: tunedBookmark) {
                 ForEach(groups, id: \.0) { group, items in
                     Section(group) {
                         ForEach(items) { b in
-                            BookmarkRow(bookmark: b, active: abs(b.frequency - radio.vfoFrequency) < 1)
+                            BookmarkRow(bookmark: b)
                                 .tag(b.id)
-                                .contentShape(Rectangle())
-                                .onTapGesture(count: 2) { radio.recall(b) }
-                                .onTapGesture { selection = b.id; radio.recall(b) }
+                                .accessibilityAction { radio.recall(b) }
+                                .accessibilityHint("Tunes to this favourite")
                                 .contextMenu {
                                     Button("Tune") { radio.recall(b) }
                                     Button("Edit…") { editing = b }
@@ -69,16 +56,25 @@ struct BookmarksView: View {
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
             .onDeleteCommand {
-                if let id = selection, let b = radio.bookmarks.first(where: { $0.id == id }) { delete(b) }
+                if let id = tunedBookmark.wrappedValue, let b = radio.bookmarks.first(where: { $0.id == id }) { delete(b) }
             }
         }
-        .background(Theme.window)
         .sheet(item: $editing) { b in
             BookmarkEditor(bookmark: b) { updated in
                 if let i = radio.bookmarks.firstIndex(where: { $0.id == updated.id }) {
                     radio.bookmarks[i] = updated
                 }
             }
+        }
+    }
+
+    /// The selection is the favourite the radio is tuned to: selecting a row (click or arrow keys) recalls
+    /// it, and tuning elsewhere clears it. The list handles every click itself, so selection and focus agree.
+    private var tunedBookmark: Binding<Bookmark.ID?> {
+        Binding {
+            groups.lazy.flatMap(\.1).first { abs($0.frequency - radio.vfoFrequency) < 1 }?.id
+        } set: { id in
+            if let b = radio.bookmarks.first(where: { $0.id == id }) { radio.recall(b) }
         }
     }
 
@@ -96,13 +92,11 @@ struct BookmarksView: View {
 
 private struct BookmarkRow: View {
     let bookmark: Bookmark
-    let active: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(bookmark.name)
-                .font(.body.weight(active ? .semibold : .regular))
-                .foregroundStyle(active ? Theme.accent : .primary)
+                .font(.body)
                 .lineLimit(1)
             HStack(spacing: 6) {
                 Text(FrequencyFormat.dotted(bookmark.frequency))
@@ -117,7 +111,6 @@ private struct BookmarkRow: View {
             .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(active ? .isSelected : [])
         .padding(.vertical, 1)
     }
 }
@@ -150,43 +143,6 @@ private struct BookmarkEditor: View {
                     dismiss()
                 }
             }
-        }
-    }
-}
-
-/// Native search field (magnifying glass, clear button, Esc clears). SwiftUI only offers one
-/// through `.searchable`, which needs a navigation container.
-private struct SearchField: NSViewRepresentable {
-    @Binding var text: String
-    let prompt: String
-
-    func makeNSView(context: Context) -> NSSearchField {
-        let field = NSSearchField()
-        field.placeholderString = prompt
-        field.controlSize = .small
-        field.font = .systemFont(ofSize: NSFont.systemFontSize(for: .small))
-        field.sendsSearchStringImmediately = true
-        field.delegate = context.coordinator
-        // The clear button sends the action without a text-change notification.
-        field.target = context.coordinator
-        field.action = #selector(Coordinator.search(_:))
-        return field
-    }
-
-    func updateNSView(_ field: NSSearchField, context: Context) {
-        if field.stringValue != text { field.stringValue = text }
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
-
-    final class Coordinator: NSObject, NSSearchFieldDelegate {
-        var text: Binding<String>
-        init(text: Binding<String>) { self.text = text }
-
-        @objc func search(_ field: NSSearchField) { text.wrappedValue = field.stringValue }
-
-        func controlTextDidChange(_ note: Notification) {
-            if let field = note.object as? NSSearchField { text.wrappedValue = field.stringValue }
         }
     }
 }

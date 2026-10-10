@@ -4,10 +4,12 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(RadioController.self) private var radio
     @Environment(Updater.self) private var updater
+    @Environment(DXClusterStore.self) private var cluster
 
     var body: some View {
         @Bindable var radio = radio
         @Bindable var updater = updater
+        @Bindable var cluster = cluster
         Form {
             Section {
                 Picker("Appearance", selection: $radio.theme) {
@@ -31,6 +33,28 @@ struct SettingsView: View {
                         .textSelection(.enabled)
                 }
                 Button("Show in Finder") { radio.showRecordingsInFinder() }
+            }
+            Section {
+                Toggle("Show DX cluster spots", isOn: $cluster.isEnabled)
+                Picker("Check for new spots", selection: $cluster.refreshInterval) {
+                    Text("Every 30 seconds").tag(30.0)
+                    Text("Every minute").tag(60.0)
+                    Text("Every 2 minutes").tag(120.0)
+                    Text("Every 5 minutes").tag(300.0)
+                }
+                .disabled(!cluster.isEnabled)
+                Picker("Keep spots for", selection: $cluster.maxAge) {
+                    Text("15 minutes").tag(900.0)
+                    Text("30 minutes").tag(1_800.0)
+                    Text("1 hour").tag(3_600.0)
+                }
+                .disabled(!cluster.isEnabled)
+            } header: {
+                Text("DX Cluster")
+            } footer: {
+                Text("Spots come from \(cluster.providerName).com, a community DX cluster. Kymara only checks for new spots while its window is visible.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Section {
                 Toggle("Automatically check for updates", isOn: $updater.automaticallyChecksForUpdates)

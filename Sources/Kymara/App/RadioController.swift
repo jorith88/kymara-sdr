@@ -120,6 +120,8 @@ final class RadioController {
     var peakHold = false { didSet { scheduleSave() } }
     var fillSpectrum = true { didSet { scheduleSave() } }
     var showBookmarks = true { didSet { scheduleSave() } }
+    var sidePanelTab: SidePanelTab = .favourites { didSet { scheduleSave() } }
+    var showDXLabels = true { didSet { scheduleSave() } }
     var showRDSPanel = true { didSet { scheduleSave() } }
     /// Spectrum share of the spectrum + waterfall height.
     var spectrumFraction: Double = 320.0 / 740.0 { didSet { scheduleSave() } }
@@ -666,8 +668,31 @@ final class RadioController {
     func recall(_ b: Bookmark) {
         mode = b.mode
         bandwidth = min(b.bandwidth, maxBandwidth)
-        tune(to: b.frequency)
-        if zoom > 1 { viewOffset = vfoFrequency - centerFrequency; clampView() }
+        jump(to: b.frequency)
+    }
+
+    /// Tunes to a DX spot in its mode, keeping the bandwidth last used in that mode.
+    func tune(to spot: DXSpot) {
+        mode = spot.demodMode
+        jump(to: spot.frequency)
+    }
+
+    func addBookmark(_ spot: DXSpot) {
+        let mode = spot.demodMode
+        let bw = mode == self.mode ? bandwidth : min(bandwidths[mode.rawValue] ?? mode.defaultBandwidth, maxBandwidth)
+        bookmarks.append(Bookmark(name: spot.dxCall, frequency: spot.frequency, mode: mode, bandwidth: bw, group: "DX"))
+    }
+
+    /// Tunes to a picked frequency (a favourite or a spot). When zoomed in, the view stays put if the
+    /// frequency is already in it, and is centred on it otherwise or when the LO had to move.
+    private func jump(to frequency: Double) {
+        let inView = (viewStart...viewEnd).contains(frequency)
+        let oldCenter = centerFrequency
+        tune(to: frequency, follow: inView)
+        if zoom > 1 && (!inView || centerFrequency != oldCenter) {
+            viewOffset = vfoFrequency - centerFrequency
+            clampView()
+        }
     }
 
     static let defaultBookmarks: [Bookmark] = [
@@ -745,6 +770,8 @@ final class RadioController {
         fillSpectrum = s.fillSpectrum
         meterCalibration = s.meterCalibration
         showBookmarks = s.showBookmarks
+        sidePanelTab = s.sidePanelTab
+        showDXLabels = s.showDXLabels
         showRDSPanel = s.showRDSPanel
         spectrumFraction = min(max(s.spectrumFraction, 0.05), 0.95)
         displayTheme = s.displayTheme
@@ -804,6 +831,8 @@ final class RadioController {
         s.fillSpectrum = fillSpectrum
         s.meterCalibration = meterCalibration
         s.showBookmarks = showBookmarks
+        s.sidePanelTab = sidePanelTab
+        s.showDXLabels = showDXLabels
         s.showRDSPanel = showRDSPanel
         s.spectrumFraction = spectrumFraction
         s.displayTheme = displayTheme

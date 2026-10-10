@@ -16,6 +16,7 @@ swift test -c release                          # all tests (SDRCoreTests + Kymar
 swift test -c release --filter RDSTests        # one test class
 swift test -c release --filter DSPTests/testEngineWFMEndToEnd   # one test
 KYMARA_HARDWARE_TESTS=1 swift test -c release --filter SDRplayTests   # include the test with an attached RSP
+KYMARA_NETWORK_TESTS=1 swift test -c release --filter DXClusterTests  # include the test that fetches from dxheat.com
 ./scripts/build-app.sh                         # → build/Kymara.app (bundles librtlsdr + libusb, ad-hoc signed)
 ./scripts/make-dmg.sh [version]                # → build/Kymara-<version>.dmg (for GitHub releases)
 swift run -c release Kymara                    # run unbundled (uses a separate UserDefaults domain "Kymara")
@@ -23,7 +24,7 @@ rtl_sdr -f 99000000 -s 2400000 -g 40 -n 19200000 out.cu8   # record raw IQ from 
 ```
 
 `scripts/check-sdrplay-shim.sh` checks `Sources/CSDRplay/include/sdrplay_shim.h` against the installed SDRplay API headers (run after an API upgrade). `scripts/check-licenses.sh` checks that the README's bundled-libraries table
-matches the librtlsdr, libusb and Sparkle versions in `build/Kymara.app` (run by `/release`). `scripts/make-icon.swift` regenerates `Resources/AppIcon.icns`. There is no linter. Releases: `/release <version>` (`.claude/skills/release/SKILL.md`) tests, bumps the version, builds the DMG, tags and publishes a GitHub release.
+matches the librtlsdr, libusb and Sparkle versions in `build/Kymara.app` (run by `/release`). `scripts/make-icon.swift` regenerates `Resources/AppIcon.icns`. There is no linter. Releases: `/release <version>` (`.claude/skills/release/SKILL.md`) merges `develop` into `main`, tests, bumps the version, builds the DMG, tags, publishes a GitHub release and fast-forwards `develop` to `main`.
 
 ## Architecture
 
@@ -51,6 +52,20 @@ The feed is `appcast.xml` on `main` (`SUFeedURL` in Info.plist); `scripts/update
 release, with pre-releases in the `beta` channel (`allowedChannels`, the "Include pre-releases" setting). The EdDSA
 private key is in the login keychain; its public half is `SUPublicEDKey`. Never replace the key: installed copies
 only accept updates signed with it. The updater is off when running unbundled (`swift run`).
+
+**DX cluster** (`Sources/Kymara/DXCluster/`). `DXHeatProvider` (behind the `SpotProvider` protocol) reads
+`https://dxheat.com/source/spots/`, the undocumented JSON endpoint DXHeat's own page polls: frequency in kHz as a
+string, time as UTC "HH:MM" (the date field is ambiguous, so `resolveTime` takes the most recent such moment), mode
+often missing. Its band (`b`) and mode (`m`) parameters had no effect when tested, so only the continent (`cdx`) is
+sent and the rest is filtered locally. `DXClusterStore` (`@MainActor @Observable`, owned by `KymaraApp`, in the
+environment) polls with exponential backoff on errors, merges duplicate reports (same call within the same kHz),
+drops spots older than `maxAge`, pauses while the main window is not visible (`WindowVisibilityReader`), and saves its
+settings under its own UserDefaults key (`DXClusterSettings`, tolerant decoding). `DXSpot.demodMode` maps the
+reported mode (digital → USB; a reported LSB/USB looks band-plan derived, so like a missing mode it gives way to
+digital words in the comment and the FT8/FT4 dial frequencies; else the sideband convention). `DXClusterStore.isShown` (mode and continent filters) applies to both the spot list (`DXSpotsView`, a tab
+of `SidePanel`) and the spectrum labels (`DXSpotOverlayLayer`, rows from `DXLabelLayout.place`). Tuning from a
+favourite or spot goes through `RadioController.jump(to:)`, which only centres a zoomed view when the target is out of
+view or the LO moves.
 
 **librtlsdr** is loaded with `dlopen` (`RTLSDRLibrary`), looking in the app's Frameworks folder first, then Homebrew. It is not a link-time dependency.
 

@@ -61,8 +61,15 @@ auto range. S-meter (S1–S9+60, estimated dBm and dBFS, peak and squelch marker
 
 **Favourites:** grouped, filterable, editable.
 
+**DX cluster:** live amateur radio spots from [DXHeat.com](https://dxheat.com), in a tab beside the favourites and
+as callsign labels on the spectrum (coloured by CW, phone or digital, fading with age). Click a spot or label to
+tune to it in its mode: CW as reported, digital modes in USB (also when the comment names one, such as RTTY or
+FT8, or the spot is on a standard FT8/FT4 frequency), and SSB as reported or by the usual sideband convention. Filter by range, mode, DX continent
+or text. Off by default; when on, Kymara checks for new spots every minute (adjustable in Settings), only while its
+window is visible.
+
 **Settings** are saved automatically to `~/Library/Preferences/nl.pa3jh.kymara.plist` and survive updates.
-Each field is read on its own (missing or unknown → default value), favourites are stored under their own key,
+Each field is read on its own (missing or unknown → default value), favourites and DX cluster settings are stored under their own keys,
 and unreadable data is backed up instead of overwritten.
 
 ## Controls
@@ -80,7 +87,7 @@ and unreadable data is backed up instead of overwritten.
 
 Frequency display: scroll over a digit to change it, click its upper/lower half for +/−,
 double-click or type a number (⌘F) to enter a frequency (`145.5`, `7100k`, `1.09G`).
-Shortcuts: ⌘R start/stop, ⌘1–7 modes, ⌘D add favourite, ⌘=/⌘−/⌘0 zoom, ⇧⌘A/⇧⌘I record.
+Shortcuts: ⌘R start/stop, ⌘1–7 modes, ⌘D add favourite, ⌘=/⌘−/⌘0 zoom, ⇧⌘A/⇧⌘I record, ⌥⌘B/⌥⌘X favourites/DX spots, ⇧⌘L DX spot labels.
 
 ## Architecture
 
@@ -88,7 +95,8 @@ Shortcuts: ⌘R start/stop, ⌘1–7 modes, ⌘D add favourite, ⌘=/⌘−/⌘0
   (NCO → decimation to ~240 kHz → channel filter (overlap-save FFT) → demodulation → ~48 kHz audio, plus the RDS decoder on the FM multiplex),
   spectrum analysis, audio output (AVAudioEngine) and recording.
 - `Sources/CSDRplay` — C declarations of the SDRplay API types (no code; the library is loaded at runtime).
-- `Sources/Kymara` — SwiftUI app, `RadioController` (state and settings), Metal renderers, persistence.
+- `Sources/Kymara` — SwiftUI app, `RadioController` (state and settings), Metal renderers, persistence, and the
+  DX cluster client (`DXCluster/`).
 
 The DSP processes 1 s of 2.4 MS/s in ~15–25 ms on Apple silicon.
 
