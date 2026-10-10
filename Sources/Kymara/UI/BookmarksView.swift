@@ -3,7 +3,6 @@ import SDRCore
 
 struct BookmarksView: View {
     @Environment(RadioController.self) private var radio
-    @State private var selection: Bookmark.ID?
     @State private var filter = ""
     @State private var editing: Bookmark?
 
@@ -35,15 +34,12 @@ struct BookmarksView: View {
             }
             .padding(6)
 
-            List(selection: $selection) {
+            List(selection: tunedBookmark) {
                 ForEach(groups, id: \.0) { group, items in
                     Section(group) {
                         ForEach(items) { b in
-                            BookmarkRow(bookmark: b, active: abs(b.frequency - radio.vfoFrequency) < 1)
+                            BookmarkRow(bookmark: b)
                                 .tag(b.id)
-                                .contentShape(Rectangle())
-                                // Simultaneous, so the list still selects the row and takes focus.
-                                .simultaneousGesture(TapGesture().onEnded { radio.recall(b) })
                                 .accessibilityAction { radio.recall(b) }
                                 .accessibilityHint("Tunes to this favourite")
                                 .contextMenu {
@@ -59,14 +55,8 @@ struct BookmarksView: View {
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
-            // Arrow keys move the selection; Return tunes to it.
-            .onKeyPress(.return) {
-                guard let b = radio.bookmarks.first(where: { $0.id == selection }) else { return .ignored }
-                radio.recall(b)
-                return .handled
-            }
             .onDeleteCommand {
-                if let id = selection, let b = radio.bookmarks.first(where: { $0.id == id }) { delete(b) }
+                if let id = tunedBookmark.wrappedValue, let b = radio.bookmarks.first(where: { $0.id == id }) { delete(b) }
             }
         }
         .sheet(item: $editing) { b in
@@ -75,6 +65,16 @@ struct BookmarksView: View {
                     radio.bookmarks[i] = updated
                 }
             }
+        }
+    }
+
+    /// The selection is the favourite the radio is tuned to: selecting a row (click or arrow keys) recalls
+    /// it, and tuning elsewhere clears it. The list handles every click itself, so selection and focus agree.
+    private var tunedBookmark: Binding<Bookmark.ID?> {
+        Binding {
+            groups.lazy.flatMap(\.1).first { abs($0.frequency - radio.vfoFrequency) < 1 }?.id
+        } set: { id in
+            if let b = radio.bookmarks.first(where: { $0.id == id }) { radio.recall(b) }
         }
     }
 
@@ -92,15 +92,11 @@ struct BookmarksView: View {
 
 private struct BookmarkRow: View {
     let bookmark: Bookmark
-    let active: Bool
-    /// Increased in a selected row, whose background is the accent colour.
-    @Environment(\.backgroundProminence) private var prominence
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(bookmark.name)
-                .font(.body.weight(active ? .semibold : .regular))
-                .foregroundStyle(active && prominence != .increased ? Theme.accent : .primary)
+                .font(.body)
                 .lineLimit(1)
             HStack(spacing: 6) {
                 Text(FrequencyFormat.dotted(bookmark.frequency))
@@ -115,7 +111,6 @@ private struct BookmarkRow: View {
             .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(active ? .isSelected : [])
         .padding(.vertical, 1)
     }
 }

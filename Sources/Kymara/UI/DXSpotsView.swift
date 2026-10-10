@@ -5,7 +5,6 @@ import AppKit
 struct DXSpotsView: View {
     @Environment(RadioController.self) private var radio
     @Environment(DXClusterStore.self) private var cluster
-    @State private var selection: DXSpot.ID?
     @State private var search = ""
 
     var body: some View {
@@ -47,13 +46,10 @@ struct DXSpotsView: View {
             }
             .frame(maxHeight: .infinity)
         } else {
-            List(selection: $selection) {
+            List(selection: tunedSpot(in: spots)) {
                 ForEach(spots) { spot in
-                    DXSpotRow(spot: spot, active: abs(spot.frequency - radio.vfoFrequency) < 500)
+                    DXSpotRow(spot: spot, active: isTuned(spot))
                         .tag(spot.id)
-                        .contentShape(Rectangle())
-                        // Simultaneous, so the list still selects the row and takes focus.
-                        .simultaneousGesture(TapGesture().onEnded { radio.tune(to: spot) })
                         .accessibilityAction { radio.tune(to: spot) }
                         .accessibilityHint("Tunes to this spot")
                         .contextMenu {
@@ -72,12 +68,18 @@ struct DXSpotsView: View {
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
-            // Arrow keys move the selection; Return tunes to it.
-            .onKeyPress(.return) {
-                guard let spot = spots.first(where: { $0.id == selection }) else { return .ignored }
-                radio.tune(to: spot)
-                return .handled
-            }
+        }
+    }
+
+    private func isTuned(_ spot: DXSpot) -> Bool { abs(spot.frequency - radio.vfoFrequency) < 500 }
+
+    /// The selection is the spot the radio is tuned to: selecting a row (click or arrow keys) tunes to it,
+    /// and tuning elsewhere clears it. The list handles every click itself, so selection and focus agree.
+    private func tunedSpot(in spots: [DXSpot]) -> Binding<DXSpot.ID?> {
+        Binding {
+            spots.first(where: isTuned)?.id
+        } set: { id in
+            if let spot = spots.first(where: { $0.id == id }) { radio.tune(to: spot) }
         }
     }
 
@@ -108,8 +110,6 @@ struct DXSpotsView: View {
 private struct DXSpotRow: View {
     let spot: DXSpot
     let active: Bool
-    /// Increased in a selected row, whose background is the accent colour.
-    @Environment(\.backgroundProminence) private var prominence
 
     private static let timeFormat: DateFormatter = {
         let f = DateFormatter()
@@ -131,9 +131,10 @@ private struct DXSpotRow: View {
 
     var body: some View {
         HStack(spacing: 7) {
-            // The mode category, as on the spectrum labels. White on a focused (accent) selection.
+            // The mode category, as on the spectrum labels. The tuned row is the selected row, whose
+            // accent background would hide a blue stripe, so it gets the label colour (white there).
             RoundedRectangle(cornerRadius: 1.5)
-                .fill(prominence == .increased ? AnyShapeStyle(.primary) : AnyShapeStyle(spot.category.color))
+                .fill(active ? AnyShapeStyle(.primary) : AnyShapeStyle(spot.category.color))
                 .frame(width: 3)
                 .accessibilityHidden(true)
             details
@@ -143,7 +144,6 @@ private struct DXSpotRow: View {
         .padding(.vertical, 1)
         .help(spot.spotters.isEmpty ? "" : "Spotted by \(spot.spotters.joined(separator: ", "))")
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(active ? .isSelected : [])
     }
 
     private var details: some View {
@@ -152,7 +152,6 @@ private struct DXSpotRow: View {
                 if let flag { Text(flag).accessibilityHidden(true) }
                 Text(spot.dxCall)
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(active && prominence != .increased ? Theme.accent : .primary)
                     .lineLimit(1)
                 Spacer(minLength: 4)
                 Text(Self.timeFormat.string(from: spot.time))
