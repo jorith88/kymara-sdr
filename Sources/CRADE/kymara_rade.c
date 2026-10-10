@@ -1,8 +1,9 @@
-// See include/kymara_rade.h. Modelled on rade_c's rade_rx_wav.c.
+// See include/kymara_rade.h. Modelled on rade_c's rade_rx_wav.c, but driving the V1 receiver directly instead of
+// through rade_api.c, which would also link the encoder and the V2 models (~16 MB of weights) a receiver never uses.
 
 #include "kymara_rade.h"
 
-#if !__has_include("rade_api.h")
+#if !__has_include("rade_rx.h")
 
 // scripts/fetch-rade.sh has not been run.
 int kymara_rade_available(void) { return 0; }
@@ -27,8 +28,7 @@ int kymara_rade_callsign_count(const kymara_rade *k) { (void)k; return 0; }
 #include <stdlib.h>
 #include <string.h>
 
-#include "rade_api.h"
-#include "rade_dsp.h"
+#include "rade_rx.h"
 #include "fargan.h"
 #include "lpcnet.h"
 #include "rade_text.h"
@@ -37,7 +37,7 @@ int kymara_rade_callsign_count(const kymara_rade *k) { (void)k; return 0; }
 #define WARMUP_FRAMES 5
 
 struct kymara_rade {
-    struct rade *rade;
+    rade_rx_state rx;
     FARGANState fargan;
     int warmup_count;
     float warmup[WARMUP_FRAMES * NB_TOTAL_FEATURES];
@@ -71,18 +71,16 @@ static void on_callsign(rade_text_t text, const char *callsign, int length, void
 kymara_rade *kymara_rade_open(void) {
     kymara_rade *k = calloc(1, sizeof(kymara_rade));
     if (!k) return NULL;
-    rade_initialize();
-    char model[] = "";
-    k->rade = rade_open(model, RADE_VERBOSE_0);
-    if (!k->rade) {
+    // As rade_open() sets up a V1 receiver: built-in weights, bottleneck 3, auxiliary data, input BPF.
+    if (rade_rx_init(&k->rx, NULL, 3, 1, 1) != 0) {
         free(k);
         return NULL;
     }
-    k->rx_in = calloc((size_t)rade_nin_max(k->rade), sizeof(RADE_COMP));
-    k->n_features = rade_n_features_in_out(k->rade);
+    k->rx.verbose = 0;
+    k->rx_in = calloc((size_t)rade_rx_nin_max(&k->rx), sizeof(RADE_COMP));
+    k->n_features = rade_rx_n_features_out(&k->rx);
     k->features = calloc((size_t)k->n_features, sizeof(float));
-    int n_eoo = rade_n_eoo_bits(k->rade);
-    k->eoo_bits = calloc((size_t)(n_eoo > 0 ? n_eoo : 1), sizeof(float));
+    k->eoo_bits = calloc((size_t)rade_rx_n_eoo_bits(&k->rx), sizeof(float));
     if (!k->rx_in || !k->features || !k->eoo_bits) {
         kymara_rade_close(k);
         return NULL;
@@ -96,7 +94,6 @@ kymara_rade *kymara_rade_open(void) {
 
 void kymara_rade_close(kymara_rade *k) {
     if (!k) return;
-    if (k->rade) rade_close(k->rade);
     if (k->text) rade_text_destroy(k->text);
     free(k->rx_in);
     free(k->features);
@@ -128,7 +125,7 @@ int kymara_rade_process(kymara_rade *k, const float *re, const float *im, int co
     int pos = 0, written = 0;
     int frame_max = kymara_rade_max_speech_per_frame(k);
     while (pos < count) {
-        int nin = rade_nin(k->rade);
+        int nin = rade_rx_nin(&k->rx);
         int take = nin - k->rx_fill;
         if (take > count - pos) take = count - pos;
         // Don't complete a frame whose speech might not fit; the caller comes back with more room.
@@ -142,14 +139,14 @@ int kymara_rade_process(kymara_rade *k, const float *re, const float *im, int co
         if (k->rx_fill < nin) break;
         k->rx_fill = 0;
 
-        int has_eoo = 0;
-        int n_out = rade_rx(k->rade, k->features, &has_eoo, k->eoo_bits, k->rx_in);
-        if (has_eoo) {
+        int ret = rade_rx_process(&k->rx, k->features, k->eoo_bits, k->rx_in);
+        int n_out = (ret & 0x1) ? k->n_features : 0;
+        if (ret & 0x2) {
             k->end_of_overs++;
             // eoo_bits holds QPSK symbols as I/Q pairs.
-            rade_text_rx(k->text, k->eoo_bits, rade_n_eoo_bits(k->rade) / 2);
+            rade_text_rx(k->text, k->eoo_bits, rade_rx_n_eoo_bits(&k->rx) / 2);
         }
-        int sync = rade_sync(k->rade);
+        int sync = rade_rx_sync(&k->rx);
         if (!sync && k->sync) {
             // Lost the signal: start the vocoder afresh on the next over.
             fargan_init(&k->fargan);
@@ -157,8 +154,8 @@ int kymara_rade_process(kymara_rade *k, const float *re, const float *im, int co
         }
         k->sync = sync;
         if (sync) {
-            k->snr_db = rade_snrdB_3k_est(k->rade);
-            k->frequency_offset = rade_freq_offset(k->rade);
+            k->snr_db = rade_rx_snrdB_3k_est(&k->rx);
+            k->frequency_offset = rade_rx_freq_offset(&k->rx);
         }
         for (int f = 0; f + RADE_NB_TOTAL_FEATURES <= n_out; f += RADE_NB_TOTAL_FEATURES) {
             written += synthesise(k, &k->features[f], &speech[written]);

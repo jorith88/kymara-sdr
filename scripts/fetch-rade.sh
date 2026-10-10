@@ -1,9 +1,12 @@
 #!/bin/bash
-# Fetches the RADE (FreeDV Radio Autoencoder) C port, the parts of Opus it needs (the FARGAN vocoder and
-# the neural-network kernels) and FreeDV's end-of-over callsign decoder into Sources/CRADE/vendor. The sources hold ~130 MB of generated model weights,
-# so they are not checked in. Without them CRADE builds as a stub and RADE mode is hidden.
+# Fetches the RADE (FreeDV Radio Autoencoder) V1 receiver from the C port, the parts of Opus it needs (the FARGAN
+# vocoder and the neural-network kernels) and FreeDV's end-of-over callsign decoder into Sources/CRADE/vendor.
+# The sources hold ~45 MB of generated model weights, so they are not checked in. Without them CRADE builds as a
+# stub and RADE mode is hidden.
 #
-# Usage: scripts/fetch-rade.sh        (re-run to update after changing the pinned versions below)
+# Usage: scripts/fetch-rade.sh [--if-needed]
+#   --if-needed  only fetch when the vendor folder is missing or was made from other pinned versions, another
+#                version of this script or other patches (build-app.sh uses this)
 set -euo pipefail
 
 RADE_C_COMMIT=c8a3dc156045cae2cd251e1a4be0c304c9ddf2f9   # github.com/freedv/rade_c
@@ -13,6 +16,17 @@ FREEDV_BACKEND_COMMIT=80183302230716029def1d0ae8655fb76f96d91e   # github.com/tm
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEST="$ROOT/Sources/CRADE/vendor"
+
+# Identifies what the vendor folder was made from.
+RECIPE=$(cat "$ROOT/scripts/fetch-rade.sh" "$ROOT"/scripts/patches/rade_c-*.patch "$ROOT/Sources/CRADE/ulog_stub.h" \
+    | shasum -a 256 | cut -c1-16)
+VERSION_LINE="RADE_C_COMMIT=$RADE_C_COMMIT OPUS_COMMIT=$OPUS_COMMIT OPUS_MODEL_SHA256=$OPUS_MODEL_SHA256"
+VERSION_LINE+=" FREEDV_BACKEND_COMMIT=$FREEDV_BACKEND_COMMIT RECIPE=$RECIPE"
+if [ "${1:-}" = "--if-needed" ] && [ "$(cat "$DEST/VERSION" 2>/dev/null)" = "$VERSION_LINE" ]; then
+    echo "RADE sources are up to date"
+    exit 0
+fi
+
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
@@ -44,19 +58,16 @@ for p in "$ROOT"/scripts/patches/rade_c-*.patch; do
     patch -s -d "$WORK/rade_c" -p1 < "$p"
 done
 
-# RADE V2 decoder layers need a larger conv input buffer (rade_c/src/opus-nnet.c.diff).
-sed -i '' 's/^#define MAX_CONV_INPUTS_ALL DRED_MAX_CONV_INPUTS$/#define MAX_CONV_INPUTS_ALL 2048/' "$WORK/opus/dnn/nnet.c"
-grep -q '^#define MAX_CONV_INPUTS_ALL 2048$' "$WORK/opus/dnn/nnet.c"
-
 rm -rf "$DEST"
 mkdir -p "$DEST/rade" "$DEST/freedv/pipeline" "$DEST/freedv/util/logging" "$DEST/opus/celt/arm" "$DEST/opus/celt/x86" "$DEST/opus/dnn/arm" "$DEST/opus/include"
 
+# Only the V1 receiver is compiled (kymara_rade.c drives it directly): the encoder and the V2 models would add
+# ~16 MB of weights to the app. All headers come along, since rade_api.h (included by rade_text) pulls them in.
 R="$WORK/rade_c/src"
-for f in rade_api rade_dsp rade_bpf rade_ofdm rade_acq rade_tx rade_rx rade_enc rade_dec rade_enc_data rade_dec_data \
-         rade_v2_ofdm rade_tx_v2 rade_rx_v2 rade_enc_v2 rade_dec_v2 rade_sync rade_enc_v2_data rade_dec_v2_data rade_sync_data; do
-    cp "$R/$f.c" "$R/$f.h" "$DEST/rade/"
+for f in rade_dsp rade_bpf rade_ofdm rade_acq rade_rx rade_dec rade_dec_data; do
+    cp "$R/$f.c" "$DEST/rade/"
 done
-cp "$R"/rade_constants.h "$R"/rade_core.h "$R"/rade_v2_constants.h "$R"/rade_v2_core.h "$DEST/rade/"
+find "$R" -maxdepth 1 -name 'rade_*.h' -exec cp {} "$DEST/rade/" \;
 cp "$WORK/rade_c/LICENSE" "$DEST/rade/LICENSE"
 
 O="$WORK/opus"
@@ -85,6 +96,5 @@ cp "$ROOT/Sources/CRADE/ulog_stub.h" "$DEST/freedv/util/logging/ulog.h"
 # kymara_rade.c picks the real decoder or stubs with __has_include; make the build recompile it.
 touch "$ROOT/Sources/CRADE/kymara_rade.c"
 
-echo "RADE_C_COMMIT=$RADE_C_COMMIT OPUS_COMMIT=$OPUS_COMMIT OPUS_MODEL_SHA256=$OPUS_MODEL_SHA256" \
-     "FREEDV_BACKEND_COMMIT=$FREEDV_BACKEND_COMMIT" > "$DEST/VERSION"
+echo "$VERSION_LINE" > "$DEST/VERSION"
 echo "Done: $(du -sh "$DEST" | cut -f1) in Sources/CRADE/vendor"
