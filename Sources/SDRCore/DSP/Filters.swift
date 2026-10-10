@@ -253,3 +253,74 @@ public final class DelayLine {
         history.removeFirst(count)
     }
 }
+
+/// Arbitrary-ratio resampler for one real channel: a windowed-sinc filter sampled at `phases` fractional
+/// delays, interpolating linearly between the two nearest. The filter passes up to `passband` Hz and is
+/// fully down by `stopband` Hz (both at most half the lower of the two rates for clean results).
+public final class Resampler {
+    public let inputRate: Double
+    public let outputRate: Double
+    private let phases = 128
+    private let length: Int
+    /// Row p holds the taps for a fractional delay of p / phases input samples, reversed for vDSP_dotpr.
+    private let bank: [Float]
+    private var buffer: [Float]
+    /// Position of the next output sample in `buffer`, in input samples.
+    private var time: Double
+    private let step: Double
+    public private(set) var output: [Float] = []
+
+    public init(inputRate: Double, outputRate: Double, passband: Double, stopband: Double) {
+        self.inputRate = inputRate
+        self.outputRate = outputRate
+        step = inputRate / outputRate
+        let fine = inputRate * Double(phases)
+        length = FIR.tapCount(transition: (stopband - passband) / inputRate, maxTaps: 511)
+        let proto = FIR.lowpass(cutoff: (passband + stopband) / 2 / fine, taps: length * phases + 1)
+        var bank = [Float](repeating: 0, count: (phases + 1) * length)
+        for p in 0...phases {
+            for m in 0..<length {
+                let k = m * phases + p
+                bank[p * length + (length - 1 - m)] = k < proto.count ? proto[k] * Float(phases) : 0
+            }
+        }
+        self.bank = bank
+        buffer = [Float](repeating: 0, count: length - 1)
+        buffer.reserveCapacity(1 << 15)
+        time = Double(length - 1)
+    }
+
+    /// Returns the number of samples written to `output`.
+    @discardableResult
+    public func process(_ input: UnsafePointer<Float>, count: Int) -> Int {
+        buffer.append(contentsOf: UnsafeBufferPointer(start: input, count: count))
+        let last = Double(buffer.count - 1)
+        let nOut = time > last ? 0 : Int((last - time) / step) + 1
+        if output.count < nOut { output = [Float](repeating: 0, count: nOut + 1024) }
+        let n = length
+        buffer.withUnsafeBufferPointer { b in
+            bank.withUnsafeBufferPointer { h in
+                output.withUnsafeMutableBufferPointer { out in
+                    for k in 0..<nOut {
+                        let t = time + Double(k) * step
+                        let i = Int(t)
+                        let pos = (t - Double(i)) * Double(phases)
+                        let p = Int(pos)
+                        let f = Float(pos - Double(p))
+                        let x = b.baseAddress! + (i - n + 1)
+                        var a: Float = 0, c: Float = 0
+                        vDSP_dotpr(x, 1, h.baseAddress! + p * n, 1, &a, vDSP_Length(n))
+                        vDSP_dotpr(x, 1, h.baseAddress! + (p + 1) * n, 1, &c, vDSP_Length(n))
+                        out[k] = a + f * (c - a)
+                    }
+                }
+            }
+        }
+        time += Double(nOut) * step
+        // Keep the history the next output still needs.
+        let drop = max(0, min(Int(time) - (n - 1), buffer.count - (n - 1)))
+        buffer.removeFirst(drop)
+        time -= Double(drop)
+        return nOut
+    }
+}

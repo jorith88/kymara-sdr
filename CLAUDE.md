@@ -16,6 +16,7 @@ swift test -c release                          # all tests (SDRCoreTests + Kymar
 swift test -c release --filter RDSTests        # one test class
 swift test -c release --filter DSPTests/testEngineWFMEndToEnd   # one test
 KYMARA_HARDWARE_TESTS=1 swift test -c release --filter SDRplayTests   # include the test with an attached RSP
+./scripts/fetch-rade.sh                        # fetch the FreeDV RADE + Opus sources (not checked in) to enable RADE mode
 ./scripts/build-app.sh                         # → build/Kymara.app (bundles librtlsdr + libusb, ad-hoc signed)
 ./scripts/make-dmg.sh [version]                # → build/Kymara-<version>.dmg (for GitHub releases)
 swift run -c release Kymara                    # run unbundled (uses a separate UserDefaults domain "Kymara")
@@ -51,6 +52,14 @@ The feed is `appcast.xml` on `main` (`SUFeedURL` in Info.plist); `scripts/update
 release, with pre-releases in the `beta` channel (`allowedChannels`, the "Include pre-releases" setting). The EdDSA
 private key is in the login keychain; its public half is `SUPublicEDKey`. Never replace the key: installed copies
 only accept updates signed with it. The updater is off when running unbundled (`swift run`).
+
+**RADE** (FreeDV digital voice, V1) is the `rade` mode: the channel (USB, or LSB conjugated to USB orientation;
+`RADESideband` auto follows the SSB convention, LSB below 10 MHz except 60 m, and is resolved to `DSPConfig.radeLSB`
+by `RadioController`, since the engine doesn't know the absolute frequency) is resampled to 8 kHz complex, decoded by
+the rade_c C port plus Opus's FARGAN vocoder (`CRADE`, wrapper `kymara_rade.c`), and the 16 kHz speech is resampled
+back to the channel rate through a FIFO that smooths the ~120 ms frame bursts (`RADEDecoder`). The library sources
+(~130 MB of model weights) live in `Sources/CRADE/vendor`, fetched at pinned commits by `scripts/fetch-rade.sh` and
+git-ignored; without them `kymara_rade.c` compiles to stubs (`__has_include`) and `DemodMode.available` hides RADE.
 
 **librtlsdr** is loaded with `dlopen` (`RTLSDRLibrary`), looking in the app's Frameworks folder first, then Homebrew. It is not a link-time dependency.
 

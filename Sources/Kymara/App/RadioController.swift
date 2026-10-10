@@ -102,6 +102,12 @@ final class RadioController {
     var afGain: Double = 20 { didSet { pushConfig() } }
     /// Only applied in modes where `DemodMode.supportsAutoNotch`.
     var autoNotch = false { didSet { pushConfig() } }
+    /// Sideband for RADE; auto follows the FreeDV convention for the VFO frequency.
+    var radeSideband: RADESideband = .auto { didSet { pushConfig() } }
+    /// Whether the current RADE reception is in LSB.
+    var radeLSB: Bool { mode == .rade && radeSideband.isLSB(at: vfoFrequency) }
+    /// The mode as shown to the user, with the sideband for RADE.
+    var modeLabel: String { mode == .rade ? "RADE " + (radeLSB ? "LSB" : "USB") : mode.rawValue }
     var deemphasis: Deemphasis = .eu { didSet { pushConfig() } }
     var stereoEnabled = true { didSet { pushConfig() } }
     var rdsEnabled = true { didSet { pushConfig() } }
@@ -140,6 +146,8 @@ final class RadioController {
     private(set) var snrDB: Double?
     private(set) var stereoLocked = false
     private(set) var rds = RDSInfo()
+    /// FreeDV RADE decoder state (RADE mode only).
+    private(set) var rade: RADEStatus?
     private(set) var overload = false
     private(set) var audioLatency: Double = 0
     private(set) var measuredRate: Double = 0
@@ -175,7 +183,7 @@ final class RadioController {
     var viewSpan: Double { sampleRate / zoom }
     var viewStart: Double { centerFrequency + viewOffset - viewSpan / 2 }
     var viewEnd: Double { centerFrequency + viewOffset + viewSpan / 2 }
-    var filterEdges: (lo: Double, hi: Double) { mode.filterEdges(bandwidth: bandwidth) }
+    var filterEdges: (lo: Double, hi: Double) { mode.filterEdges(bandwidth: bandwidth, lsb: radeLSB) }
     var filterStart: Double { vfoFrequency + filterEdges.lo }
     var filterEnd: Double { vfoFrequency + filterEdges.hi }
     /// Where the passband would land if the user clicked at the hover position. Nil over the current
@@ -552,6 +560,7 @@ final class RadioController {
         c.agcMode = agcMode
         c.afGainDB = Float(afGain)
         c.autoNotch = autoNotch
+        c.radeLSB = radeLSB
         // Perceptual volume curve.
         c.volume = Float(volume * volume)
         c.muted = muted
@@ -580,6 +589,13 @@ final class RadioController {
         let snr = s.snrDB.map { Double($0.rounded()) }
         if snrDB != snr { snrDB = snr }
         if stereoLocked != s.stereoLocked { stereoLocked = s.stereoLocked }
+        let radeStatus = s.rade.map { r in
+            var r = r
+            r.snrDB = r.snrDB.rounded()
+            r.frequencyOffset = r.frequencyOffset.rounded()
+            return r
+        }
+        if rade != radeStatus { rade = radeStatus }
         let isOverloaded = s.overload || (source?.hardwareOverload ?? false)
         if overload != isOverloaded { overload = isOverloaded }
         sdrplayGainDB = (source as? SDRplaySource)?.systemGainDB
@@ -664,7 +680,7 @@ final class RadioController {
     }
 
     func recall(_ b: Bookmark) {
-        mode = b.mode
+        mode = DemodMode.available.contains(b.mode) ? b.mode : .usb
         bandwidth = min(b.bandwidth, maxBandwidth)
         tune(to: b.frequency)
         if zoom > 1 { viewOffset = vfoFrequency - centerFrequency; clampView() }
@@ -707,9 +723,11 @@ final class RadioController {
         bandwidths = s.bandwidths
         steps = s.steps
         sampleRate = s.sampleRate
-        mode = s.mode
-        bandwidth = s.bandwidths[s.mode.rawValue] ?? s.mode.defaultBandwidth
-        step = s.steps[s.mode.rawValue] ?? s.mode.defaultStep
+        // A mode this build lacks (RADE without its sources) falls back to its sideband.
+        let savedMode = DemodMode.available.contains(s.mode) ? s.mode : .usb
+        mode = savedMode
+        bandwidth = s.bandwidths[savedMode.rawValue] ?? savedMode.defaultBandwidth
+        step = s.steps[savedMode.rawValue] ?? savedMode.defaultStep
         centerFrequency = s.center
         vfoFrequency = s.vfo
         gainAuto = s.gainAuto
@@ -725,6 +743,7 @@ final class RadioController {
         squelchAuto = s.squelchAuto
         agcMode = s.agcMode
         autoNotch = s.autoNotch
+        radeSideband = s.radeSideband
         afGain = s.afGain
         deemphasis = s.deemphasis
         stereoEnabled = s.stereo
@@ -784,6 +803,7 @@ final class RadioController {
         s.squelchAuto = squelchAuto
         s.agcMode = agcMode
         s.autoNotch = autoNotch
+        s.radeSideband = radeSideband
         s.afGain = afGain
         s.deemphasis = deemphasis
         s.stereo = stereoEnabled

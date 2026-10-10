@@ -134,7 +134,7 @@ private struct BookmarkEditor: View {
             TextField("Group", text: $bookmark.group)
             TextField("Frequency", text: $frequencyText)
             Picker("Mode", selection: $bookmark.mode) {
-                ForEach(DemodMode.allCases) { Text($0.rawValue).tag($0) }
+                ForEach(DemodMode.available) { Text($0.rawValue).tag($0) }
             }
             TextField("Bandwidth (Hz)", value: $bookmark.bandwidth, format: .number)
         }

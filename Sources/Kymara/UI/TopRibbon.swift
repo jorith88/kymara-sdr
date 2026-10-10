@@ -22,7 +22,7 @@ struct TopRibbon: View {
                         .padding(.vertical, 1)
                         .background(Theme.accent.opacity(0.25), in: RoundedRectangle(cornerRadius: 3))
                         .foregroundStyle(Theme.accent)
-                    Text(radio.mode.rawValue + "  ·  " + FrequencyFormat.bandwidth(radio.bandwidth))
+                    Text(radio.modeLabel + "  ·  " + FrequencyFormat.bandwidth(radio.bandwidth))
                         .font(.system(size: 10.5, weight: .medium))
                         .foregroundStyle(.secondary)
                     if radio.stereoLocked {
@@ -30,6 +30,13 @@ struct TopRibbon: View {
                             .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(Theme.green)
                             .accessibilityLabel("Stereo")
+                    }
+                    if radio.rade?.sync == true {
+                        Text("RADE")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Theme.green)
+                            .help("Receiving FreeDV RADE")
+                            .accessibilityLabel("RADE in sync")
                     }
                     if radio.overload {
                         Text("OVERLOAD")
@@ -74,7 +81,7 @@ struct TopRibbon: View {
             // Mode + bandwidth.
             VStack(alignment: .leading, spacing: 5) {
                 Picker("Mode", selection: $radio.mode) {
-                    ForEach(DemodMode.allCases) { Text($0.rawValue).tag($0) }
+                    ForEach(DemodMode.available) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
@@ -106,7 +113,7 @@ struct TopRibbon: View {
                     .pickerStyle(.menu)
                     .fixedSize()
                     .controlSize(.small)
-                    .disabled(radio.mode == .wfm || radio.mode == .nfm)
+                    .disabled(radio.mode == .wfm || radio.mode == .nfm || radio.mode == .rade)
                 }
             }
             .fixedSize()
