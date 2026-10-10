@@ -45,21 +45,6 @@ struct SpectrumOverlay: View {
                     .fixedSize()
                     .position(x: min(max(vx, 50), w - 50), y: 10)
 
-                // Hover readout.
-                if let hover = radio.hover {
-                    let hx = (hover.frequency - start) / span * w
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(FrequencyFormat.short(hover.frequency))
-                        if let db = hover.db { Text(String(format: "%.1f dB", db)) }
-                    }
-                    .font(.system(size: 10, design: .monospaced))
-                    .padding(4)
-                    .background(.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 3))
-                    .foregroundStyle(.white)
-                    .fixedSize()
-                    .position(x: hx + (hx > w - 110 ? -55 : 55), y: 36)
-                }
-
                 // Zoom indicator.
                 if radio.zoom > 1.01 {
                     Text(String(format: "Zoom ×%.1f · span %@", radio.zoom, FrequencyFormat.bandwidth(span)))
@@ -75,15 +60,15 @@ struct SpectrumOverlay: View {
     }
 }
 
-/// Hover readout on the waterfall, so the frequency under the cursor is visible where the mouse is.
+/// The frequency under the cursor, at the top of the waterfall, for a hover over the spectrum or the
+/// waterfall (over the spectrum it would cover the DX spot labels).
 struct WaterfallOverlay: View {
     @Environment(RadioController.self) private var radio
 
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width
-            // Only the spectrum reports a level, so a hover without one comes from the waterfall.
-            if let hover = radio.hover, hover.db == nil {
+            if let hover = radio.hover {
                 let hx = (hover.frequency - radio.viewStart) / radio.viewSpan * w
                 Text(FrequencyFormat.short(hover.frequency))
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
@@ -101,6 +86,7 @@ struct WaterfallOverlay: View {
 
 struct StatusBar: View {
     @Environment(RadioController.self) private var radio
+    @Environment(DXClusterStore.self) private var cluster
 
     var body: some View {
         HStack(spacing: 16) {
@@ -119,6 +105,7 @@ struct StatusBar: View {
                 item("Audio", String(format: "%.1f kHz · %.0f ms", radio.audioRate / 1e3, radio.audioLatency * 1000))
             }
             item("RBW", String(format: "%.1f Hz", radio.sampleRate / Double(radio.fftSize)))
+            if cluster.isEnabled { DXClusterStatus() }
             Spacer()
             Text("Scroll: tune · ⌘/⌥ scroll or pinch: zoom · drag: pan/LO · ⌥: fine")
                 .foregroundStyle(.tertiary)
@@ -166,6 +153,7 @@ private struct RDSOverlayLayer: View {
 
 struct ContentView: View {
     @Environment(RadioController.self) private var radio
+    @Environment(DXClusterStore.self) private var cluster
 
     var body: some View {
         @Bindable var radio = radio
@@ -183,6 +171,7 @@ struct ContentView: View {
                             .accessibilityValue("Tuned to \(FrequencyFormat.short(radio.vfoFrequency))")
                             .accessibilityHint("Scroll to tune, drag to pan")
                         SpectrumOverlay()
+                        DXSpotOverlayLayer()
                         RDSOverlayLayer()
                     }
                 } bottom: {
@@ -196,13 +185,15 @@ struct ContentView: View {
                 }
                 if radio.showBookmarks {
                     Rectangle().fill(Theme.border).frame(width: 1)
-                    BookmarksView()
+                    SidePanel()
                         .frame(width: 230)
                 }
             }
             StatusBar()
         }
         .background(Theme.window)
+        // Polling for DX spots stops while nobody can see them.
+        .background(WindowVisibilityReader { cluster.isPaused = !$0 })
         // Identified items make the toolbar user-customizable (View > Customize Toolbar…).
         .toolbar(id: "main") {
             ToolbarItem(id: "zoomOut", placement: .primaryAction) {
@@ -230,11 +221,18 @@ struct ContentView: View {
                 .disabled(radio.mode != .wfm || !radio.rdsEnabled)
                 .help("Show or hide the RDS panel on the spectrum (⇧⌘R)")
             }
+            ToolbarItem(id: "dxLabels", placement: .primaryAction) {
+                Toggle(isOn: $radio.showDXLabels) {
+                    Label("DX Labels", systemImage: "tag")
+                }
+                .disabled(!cluster.isEnabled)
+                .help("Show or hide DX spot labels on the spectrum (⇧⌘L)")
+            }
             ToolbarItem(id: "favourites", placement: .primaryAction) {
                 Toggle(isOn: $radio.showBookmarks) {
-                    Label("Favourites", systemImage: "sidebar.right")
+                    Label("Side Panel", systemImage: "sidebar.right")
                 }
-                .help("Show or hide favourites (⌥⌘B)")
+                .help("Show or hide favourites and DX spots (⌥⌘B, ⌥⌘X)")
             }
         }
         .alert("Error", isPresented: Binding(get: { radio.errorMessage != nil }, set: { if !$0 { radio.errorMessage = nil } })) {
@@ -242,5 +240,37 @@ struct ContentView: View {
         } message: {
             Text(radio.errorMessage ?? "")
         }
+    }
+}
+
+/// DX cluster state in the status bar: spot count, or why there are no new spots.
+private struct DXClusterStatus: View {
+    @Environment(DXClusterStore.self) private var cluster
+
+    private var state: (color: Color, text: String) {
+        if cluster.isPaused { return (.gray, "paused") }
+        let count = cluster.shownCount
+        if cluster.lastError != nil {
+            return (Theme.amber, count == 0 ? "offline" : "\(DXClusterStore.spotCount(count)), offline")
+        }
+        if cluster.lastUpdate == nil { return (.gray, "connecting") }
+        return (Theme.green, DXClusterStore.spotCount(count))
+    }
+
+    var body: some View {
+        let state = state
+        HStack(spacing: 4) {
+            Circle()
+                .fill(state.color)
+                .frame(width: 7, height: 7)
+                .accessibilityHidden(true)
+            Text("DX").foregroundStyle(.tertiary)
+            Text(state.text)
+        }
+        .help(cluster.lastError ?? "Spots from \(cluster.providerName).com"
+              + (cluster.lastUpdate.map { ", updated \($0.formatted(date: .omitted, time: .shortened))" } ?? ""))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("DX cluster")
+        .accessibilityValue(state.text)
     }
 }

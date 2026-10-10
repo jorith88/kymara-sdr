@@ -20,14 +20,8 @@ struct BookmarksView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Image(systemName: "star.fill")
-                    .foregroundStyle(Theme.amber)
-                    .accessibilityHidden(true)
-                Text("Favourites")
-                    .font(.subheadline.weight(.semibold))
-                    .accessibilityAddTraits(.isHeader)
-                Spacer()
+            HStack(spacing: 4) {
+                SearchField(text: $filter, prompt: "Filter")
                 Button {
                     radio.addBookmark()
                 } label: {
@@ -39,12 +33,7 @@ struct BookmarksView: View {
                 .buttonStyle(.borderless)
                 .help("Add the current frequency to favourites (⌘D)")
             }
-            .padding(.horizontal, 10)
-            .frame(minHeight: 32)
-            .background(Theme.panelHeader)
-
-            SearchField(text: $filter, prompt: "Filter")
-                .padding(6)
+            .padding(6)
 
             List(selection: $selection) {
                 ForEach(groups, id: \.0) { group, items in
@@ -53,8 +42,10 @@ struct BookmarksView: View {
                             BookmarkRow(bookmark: b, active: abs(b.frequency - radio.vfoFrequency) < 1)
                                 .tag(b.id)
                                 .contentShape(Rectangle())
-                                .onTapGesture(count: 2) { radio.recall(b) }
-                                .onTapGesture { selection = b.id; radio.recall(b) }
+                                // Simultaneous, so the list still selects the row and takes focus.
+                                .simultaneousGesture(TapGesture().onEnded { radio.recall(b) })
+                                .accessibilityAction { radio.recall(b) }
+                                .accessibilityHint("Tunes to this favourite")
                                 .contextMenu {
                                     Button("Tune") { radio.recall(b) }
                                     Button("Edit…") { editing = b }
@@ -68,11 +59,16 @@ struct BookmarksView: View {
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
+            // Arrow keys move the selection; Return tunes to it.
+            .onKeyPress(.return) {
+                guard let b = radio.bookmarks.first(where: { $0.id == selection }) else { return .ignored }
+                radio.recall(b)
+                return .handled
+            }
             .onDeleteCommand {
                 if let id = selection, let b = radio.bookmarks.first(where: { $0.id == id }) { delete(b) }
             }
         }
-        .background(Theme.window)
         .sheet(item: $editing) { b in
             BookmarkEditor(bookmark: b) { updated in
                 if let i = radio.bookmarks.firstIndex(where: { $0.id == updated.id }) {
@@ -97,12 +93,14 @@ struct BookmarksView: View {
 private struct BookmarkRow: View {
     let bookmark: Bookmark
     let active: Bool
+    /// Increased in a selected row, whose background is the accent colour.
+    @Environment(\.backgroundProminence) private var prominence
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(bookmark.name)
                 .font(.body.weight(active ? .semibold : .regular))
-                .foregroundStyle(active ? Theme.accent : .primary)
+                .foregroundStyle(active && prominence != .increased ? Theme.accent : .primary)
                 .lineLimit(1)
             HStack(spacing: 6) {
                 Text(FrequencyFormat.dotted(bookmark.frequency))
@@ -150,43 +148,6 @@ private struct BookmarkEditor: View {
                     dismiss()
                 }
             }
-        }
-    }
-}
-
-/// Native search field (magnifying glass, clear button, Esc clears). SwiftUI only offers one
-/// through `.searchable`, which needs a navigation container.
-private struct SearchField: NSViewRepresentable {
-    @Binding var text: String
-    let prompt: String
-
-    func makeNSView(context: Context) -> NSSearchField {
-        let field = NSSearchField()
-        field.placeholderString = prompt
-        field.controlSize = .small
-        field.font = .systemFont(ofSize: NSFont.systemFontSize(for: .small))
-        field.sendsSearchStringImmediately = true
-        field.delegate = context.coordinator
-        // The clear button sends the action without a text-change notification.
-        field.target = context.coordinator
-        field.action = #selector(Coordinator.search(_:))
-        return field
-    }
-
-    func updateNSView(_ field: NSSearchField, context: Context) {
-        if field.stringValue != text { field.stringValue = text }
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
-
-    final class Coordinator: NSObject, NSSearchFieldDelegate {
-        var text: Binding<String>
-        init(text: Binding<String>) { self.text = text }
-
-        @objc func search(_ field: NSSearchField) { text.wrappedValue = field.stringValue }
-
-        func controlTextDidChange(_ note: Notification) {
-            if let field = note.object as? NSSearchField { text.wrappedValue = field.stringValue }
         }
     }
 }
