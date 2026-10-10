@@ -671,12 +671,10 @@ final class RadioController {
         jump(to: b.frequency)
     }
 
-    /// Tunes to a DX spot in its mode, keeping the bandwidth last used in that mode. `centre` brings
-    /// it to the middle of the view when zoomed in; without it the view only moves if the passband
-    /// would leave it (a label on the spectrum is already in view).
-    func tune(to spot: DXSpot, centre: Bool = true) {
+    /// Tunes to a DX spot in its mode, keeping the bandwidth last used in that mode.
+    func tune(to spot: DXSpot) {
         mode = spot.demodMode
-        if centre { jump(to: spot.frequency) } else { tune(to: spot.frequency, follow: true) }
+        jump(to: spot.frequency)
     }
 
     func addBookmark(_ spot: DXSpot) {
@@ -685,10 +683,16 @@ final class RadioController {
         bookmarks.append(Bookmark(name: spot.dxCall, frequency: spot.frequency, mode: mode, bandwidth: bw, group: "DX"))
     }
 
-    /// Tunes to a frequency picked from a list, bringing it into view when zoomed in.
+    /// Tunes to a picked frequency (a favourite or a spot). When zoomed in, the view stays put if the
+    /// frequency is already in it, and is centred on it otherwise or when the LO had to move.
     private func jump(to frequency: Double) {
-        tune(to: frequency)
-        if zoom > 1 { viewOffset = vfoFrequency - centerFrequency; clampView() }
+        let inView = (viewStart...viewEnd).contains(frequency)
+        let oldCenter = centerFrequency
+        tune(to: frequency, follow: inView)
+        if zoom > 1 && (!inView || centerFrequency != oldCenter) {
+            viewOffset = vfoFrequency - centerFrequency
+            clampView()
+        }
     }
 
     static let defaultBookmarks: [Bookmark] = [
