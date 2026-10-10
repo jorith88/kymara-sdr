@@ -177,6 +177,28 @@ extension DXClusterSettings {
     }
 }
 
+/// Persisted FreeDV Reporter settings, under their own key.
+struct FreeDVReporterSettings: Codable, Equatable {
+    var enabled = false
+    var callsign = ""
+    var locator = ""
+    var message = ""
+}
+
+extension FreeDVReporterSettings {
+    /// Tolerant like `RadioSettings`: a missing or unreadable field keeps its default.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func read<T: Decodable>(_ key: CodingKeys, _ value: inout T) {
+            if let v = c.lenient(T.self, key) { value = v }
+        }
+        read(.enabled, &enabled)
+        read(.callsign, &callsign)
+        read(.locator, &locator)
+        read(.message, &message)
+    }
+}
+
 /// Decodes an array, skipping elements that fail instead of failing the whole array.
 struct LossyArray<Element: Decodable>: Decodable {
     var elements: [Element]
@@ -203,6 +225,7 @@ struct SettingsStore {
     static let settingsKey = "RadioSettings.v1"
     static let bookmarksKey = "Bookmarks.v1"
     static let dxClusterKey = "DXCluster.v1"
+    static let freedvReporterKey = "FreeDVReporter.v1"
 
     var defaults: UserDefaults = .standard
 
@@ -248,6 +271,19 @@ struct SettingsStore {
     func saveDXCluster(_ settings: DXClusterSettings) {
         if let data = try? JSONEncoder().encode(settings) {
             defaults.set(data, forKey: Self.dxClusterKey)
+        }
+    }
+
+    func loadFreeDVReporter() -> FreeDVReporterSettings? {
+        guard let data = defaults.data(forKey: Self.freedvReporterKey) else { return nil }
+        if let s = try? JSONDecoder().decode(FreeDVReporterSettings.self, from: data) { return s }
+        backup(data, key: Self.freedvReporterKey)
+        return nil
+    }
+
+    func saveFreeDVReporter(_ settings: FreeDVReporterSettings) {
+        if let data = try? JSONEncoder().encode(settings) {
+            defaults.set(data, forKey: Self.freedvReporterKey)
         }
     }
 

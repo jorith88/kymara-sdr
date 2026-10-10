@@ -51,6 +51,8 @@ pitch), DSB and RADE (FreeDV digital voice). Adjustable bandwidth (presets or by
 **FreeDV RADE:** receives FreeDV's RADE V1 digital voice: a neural decoder and the FARGAN vocoder turn the OFDM
 signal back into speech. Shows sync, SNR and frequency offset, and the callsign sent at the end of each over. The
 sideband follows the FreeDV convention (LSB below 10 MHz except 60 m, USB above) or can be set by hand.
+Optionally reports to [FreeDV Reporter](https://qso.freedv.org) as a receive-only station (Settings → FreeDV
+Reporter): your callsign, locator, frequency and an optional message while the radio runs in RADE mode, and the callsigns you decode.
 
 **RDS (WFM):** programme service name, PI code, programme type, TP/TA, RadioText and clock time, with
 error correction of short bursts. Shown as a panel over the spectrum; new favourites are named after the station.
@@ -77,7 +79,7 @@ or text. Off by default; when on, Kymara checks for new spots every minute (adju
 window is visible.
 
 **Settings** are saved automatically to `~/Library/Preferences/nl.pa3jh.kymara.plist` and survive updates.
-Each field is read on its own (missing or unknown → default value), favourites and DX cluster settings are stored under their own keys,
+Each field is read on its own (missing or unknown → default value), favourites, DX cluster and FreeDV Reporter settings are stored under their own keys,
 and unreadable data is backed up instead of overwritten.
 
 ## Controls
@@ -106,7 +108,7 @@ Shortcuts: ⌘R start/stop, ⌘1–7 modes, ⌘D add favourite, ⌘=/⌘−/⌘0
   callsign decoder (their sources are fetched by `scripts/fetch-rade.sh`).
 - `Sources/CSDRplay` — C declarations of the SDRplay API types (no code; the library is loaded at runtime).
 - `Sources/Kymara` — SwiftUI app, `RadioController` (state and settings), Metal renderers, persistence, and the
-  DX cluster client (`DXCluster/`).
+  DX cluster client (`DXCluster/`) and FreeDV Reporter client (`FreeDVReporter/`).
 
 The DSP processes 1 s of 2.4 MS/s in ~15–25 ms on Apple silicon.
 

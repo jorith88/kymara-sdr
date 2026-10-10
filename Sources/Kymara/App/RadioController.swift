@@ -153,6 +153,8 @@ final class RadioController {
     /// Callsign from the last RADE end-of-over on this frequency.
     private(set) var radeCallsign: String?
     @ObservationIgnored private var radeCallsignCount = 0
+    /// Reports RADE reception to qso.freedv.org while the radio runs in RADE mode on a real receiver.
+    let reporter = FreeDVReporter(persistence: SettingsStore())
     private(set) var overload = false
     private(set) var audioLatency: Double = 0
     private(set) var measuredRate: Double = 0
@@ -350,6 +352,7 @@ final class RadioController {
         stopSource()
         audioOut.stop()
         isRunning = false
+        reporter.update(active: false, frequency: vfoFrequency)
         clearRDS()
         sourceName = "Not running"
         signalDB = -150
@@ -604,9 +607,18 @@ final class RadioController {
         }
         if rade != radeStatus { rade = radeStatus }
         // The count restarts at 0 when the engine builds a new decoder, so any change to a non-zero count is news.
+        var heardCallsign: String?
         if let s = s.rade, s.callsignCount != radeCallsignCount {
-            if s.callsignCount > 0, let call = s.callsign, !call.isEmpty { radeCallsign = call }
+            if s.callsignCount > 0, let call = s.callsign, !call.isEmpty {
+                radeCallsign = call
+                heardCallsign = call
+            }
             radeCallsignCount = s.callsignCount
+        }
+        // File and demo sources aren't on the air: reporting them would put false reports on the map.
+        reporter.update(active: mode == .rade && sourceKind != .file && sourceKind != .demo, frequency: vfoFrequency)
+        if let r = s.rade, heardCallsign != nil || r.sync {
+            reporter.heard(callsign: heardCallsign, snr: r.snrDB)
         }
         let isOverloaded = s.overload || (source?.hardwareOverload ?? false)
         if overload != isOverloaded { overload = isOverloaded }
