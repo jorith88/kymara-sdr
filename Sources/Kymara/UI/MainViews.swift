@@ -60,15 +60,15 @@ struct SpectrumOverlay: View {
     }
 }
 
-/// Hover readout on the waterfall, so the frequency under the cursor is visible where the mouse is.
+/// The frequency under the cursor, at the top of the waterfall, for a hover over the spectrum or the
+/// waterfall (over the spectrum it would cover the DX spot labels).
 struct WaterfallOverlay: View {
     @Environment(RadioController.self) private var radio
 
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width
-            // Only the spectrum reports a level, so a hover without one comes from the waterfall.
-            if let hover = radio.hover, hover.db == nil {
+            if let hover = radio.hover {
                 let hx = (hover.frequency - radio.viewStart) / radio.viewSpan * w
                 Text(FrequencyFormat.short(hover.frequency))
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
