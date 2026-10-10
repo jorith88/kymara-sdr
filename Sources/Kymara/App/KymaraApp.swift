@@ -67,6 +67,9 @@ struct KymaraApp: App {
                     .disabled(radio.mode != .wfm || !radio.rdsEnabled)
                 Toggle("Show Favourites", isOn: $radio.showBookmarks)
                     .keyboardShortcut("b", modifiers: [.command, .option])
+                Toggle("Show DX Spot Labels", isOn: $radio.showDXLabels)
+                    .keyboardShortcut("l", modifiers: [.command, .shift])
+                    .disabled(!dxCluster.isEnabled)
                 Divider()
             }
             CommandMenu("Radio") {

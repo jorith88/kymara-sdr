@@ -124,6 +124,28 @@ final class DXClusterTests: XCTestCase {
         XCTAssertTrue(spots.allSatisfy { abs($0.time.timeIntervalSinceNow) < 6 * 3_600 })
     }
 
+    func testLabelLayoutStacksOverlapsAndDropsOverflow() {
+        typealias Item = DXLabelLayout.Item
+        let rows = DXLabelLayout.place([
+            Item(id: "a", x: 100, width: 50),   // 75…125, row 0
+            Item(id: "b", x: 120, width: 50),   // overlaps a → row 1
+            Item(id: "c", x: 200, width: 50),   // clear of a → row 0
+            Item(id: "d", x: 110, width: 50),   // overlaps a and b, no rows left → dropped
+        ], rows: 2)
+        XCTAssertEqual(rows, ["a": 0, "b": 1, "c": 0])
+        XCTAssertTrue(DXLabelLayout.place([Item(id: "x", x: 0, width: 10)], rows: 0).isEmpty)
+    }
+
+    func testLabelLayoutKeepsAGap() {
+        typealias Item = DXLabelLayout.Item
+        // Edges 2 apart: closer than the 4 pt gap, so the second label goes to the next row.
+        XCTAssertEqual(DXLabelLayout.place([Item(id: "a", x: 100, width: 50), Item(id: "b", x: 152, width: 50)],
+                                           rows: 2), ["a": 0, "b": 1])
+        // Edges 5 apart: both fit in one row.
+        XCTAssertEqual(DXLabelLayout.place([Item(id: "a", x: 100, width: 50), Item(id: "b", x: 155, width: 50)],
+                                           rows: 2), ["a": 0, "b": 0])
+    }
+
     // MARK: Store
 
     @MainActor

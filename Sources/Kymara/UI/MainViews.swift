@@ -166,6 +166,7 @@ private struct RDSOverlayLayer: View {
 
 struct ContentView: View {
     @Environment(RadioController.self) private var radio
+    @Environment(DXClusterStore.self) private var cluster
 
     var body: some View {
         @Bindable var radio = radio
@@ -183,6 +184,7 @@ struct ContentView: View {
                             .accessibilityValue("Tuned to \(FrequencyFormat.short(radio.vfoFrequency))")
                             .accessibilityHint("Scroll to tune, drag to pan")
                         SpectrumOverlay()
+                        DXSpotOverlayLayer()
                         RDSOverlayLayer()
                     }
                 } bottom: {
@@ -229,6 +231,13 @@ struct ContentView: View {
                 }
                 .disabled(radio.mode != .wfm || !radio.rdsEnabled)
                 .help("Show or hide the RDS panel on the spectrum (⇧⌘R)")
+            }
+            ToolbarItem(id: "dxLabels", placement: .primaryAction) {
+                Toggle(isOn: $radio.showDXLabels) {
+                    Label("DX Labels", systemImage: "tag")
+                }
+                .disabled(!cluster.isEnabled)
+                .help("Show or hide DX spot labels on the spectrum (⇧⌘L)")
             }
             ToolbarItem(id: "favourites", placement: .primaryAction) {
                 Toggle(isOn: $radio.showBookmarks) {

@@ -121,6 +121,7 @@ final class RadioController {
     var fillSpectrum = true { didSet { scheduleSave() } }
     var showBookmarks = true { didSet { scheduleSave() } }
     var sidePanelTab: SidePanelTab = .favourites { didSet { scheduleSave() } }
+    var showDXLabels = true { didSet { scheduleSave() } }
     var showRDSPanel = true { didSet { scheduleSave() } }
     /// Spectrum share of the spectrum + waterfall height.
     var spectrumFraction: Double = 320.0 / 740.0 { didSet { scheduleSave() } }
@@ -764,6 +765,7 @@ final class RadioController {
         meterCalibration = s.meterCalibration
         showBookmarks = s.showBookmarks
         sidePanelTab = s.sidePanelTab
+        showDXLabels = s.showDXLabels
         showRDSPanel = s.showRDSPanel
         spectrumFraction = min(max(s.spectrumFraction, 0.05), 0.95)
         displayTheme = s.displayTheme
@@ -824,6 +826,7 @@ final class RadioController {
         s.meterCalibration = meterCalibration
         s.showBookmarks = showBookmarks
         s.sidePanelTab = sidePanelTab
+        s.showDXLabels = showDXLabels
         s.showRDSPanel = showRDSPanel
         s.spectrumFraction = spectrumFraction
         s.displayTheme = displayTheme

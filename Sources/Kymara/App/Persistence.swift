@@ -70,6 +70,7 @@ struct RadioSettings: Codable {
     var meterCalibration: Double = -10
     var showBookmarks = true
     var sidePanelTab: SidePanelTab = .favourites
+    var showDXLabels = true
     var showRDSPanel = true
     var spectrumFraction: Double = 320.0 / 740.0
     var theme: AppTheme? = nil
@@ -132,6 +133,7 @@ extension RadioSettings {
         read(.meterCalibration, &meterCalibration)
         read(.showBookmarks, &showBookmarks)
         read(.sidePanelTab, &sidePanelTab)
+        read(.showDXLabels, &showDXLabels)
         read(.showRDSPanel, &showRDSPanel)
         read(.spectrumFraction, &spectrumFraction)
         read(.displayTheme, &displayTheme)
