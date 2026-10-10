@@ -53,6 +53,20 @@ release, with pre-releases in the `beta` channel (`allowedChannels`, the "Includ
 private key is in the login keychain; its public half is `SUPublicEDKey`. Never replace the key: installed copies
 only accept updates signed with it. The updater is off when running unbundled (`swift run`).
 
+**DX cluster** (`Sources/Kymara/DXCluster/`). `DXHeatProvider` (behind the `SpotProvider` protocol) reads
+`https://dxheat.com/source/spots/`, the undocumented JSON endpoint DXHeat's own page polls: frequency in kHz as a
+string, time as UTC "HH:MM" (the date field is ambiguous, so `resolveTime` takes the most recent such moment), mode
+often missing. Its band (`b`) and mode (`m`) parameters had no effect when tested, so only the continent (`cdx`) is
+sent and the rest is filtered locally. `DXClusterStore` (`@MainActor @Observable`, owned by `KymaraApp`, in the
+environment) polls with exponential backoff on errors, merges duplicate reports (same call within the same kHz),
+drops spots older than `maxAge`, pauses while the main window is not visible (`WindowVisibilityReader`), and saves its
+settings under its own UserDefaults key (`DXClusterSettings`, tolerant decoding). `DXSpot.demodMode` maps the
+reported mode (digital → USB; without one: comment words, the FT8/FT4 dial frequencies, else the sideband
+convention). `DXClusterStore.isShown` (mode and continent filters) applies to both the spot list (`DXSpotsView`, a tab
+of `SidePanel`) and the spectrum labels (`DXSpotOverlayLayer`, rows from `DXLabelLayout.place`). Tuning from a
+favourite or spot goes through `RadioController.jump(to:)`, which only centres a zoomed view when the target is out of
+view or the LO moves.
+
 **librtlsdr** is loaded with `dlopen` (`RTLSDRLibrary`), looking in the app's Frameworks folder first, then Homebrew. It is not a link-time dependency.
 
 **SDRplay API** (closed source, installed by the user, never bundled) is loaded with `dlopen` from `/usr/local/lib` (`SDRplayLibrary` in `SDRplaySource.swift`), using the struct declarations in `CSDRplay`. The API connection is opened once per process. Settings are written into the API's parameter structs and applied with `sdrplay_api_Update` reason flags (`SDRplayUpdate`); IF mode and RSPduo tuner changes need a restart (`configure` returns true). `SDRplayRatePlan` maps each output rate to ADC rate, IF, IF filter and decimation; `SDRplayModel` holds the per-model LNA tables and options.
