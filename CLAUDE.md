@@ -17,6 +17,7 @@ swift test -c release --filter RDSTests        # one test class
 swift test -c release --filter DSPTests/testEngineWFMEndToEnd   # one test
 KYMARA_HARDWARE_TESTS=1 swift test -c release --filter SDRplayTests   # include the test with an attached RSP
 KYMARA_NETWORK_TESTS=1 swift test -c release --filter DXClusterTests  # include the test that fetches from dxheat.com
+KYMARA_NETWORK_TESTS=1 swift test -c release --filter FreeDVReporterTests  # include the qso.freedv.org handshake
 ./scripts/fetch-rade.sh                        # fetch the FreeDV RADE + Opus sources (not checked in) to enable RADE mode
 ./scripts/build-app.sh                         # → build/Kymara.app (bundles librtlsdr + libusb, ad-hoc signed)
 ./scripts/make-dmg.sh [version]                # → build/Kymara-<version>.dmg (for GitHub releases)
@@ -68,6 +69,14 @@ the decoder, so a release can't ship without RADE.
 The end-of-over callsign is decoded by freedv-backend's `rade_text.cpp` (LDPC(112,56), CRC8), also fetched. Fixes to
 rade_c live in `scripts/patches/` and are applied by the fetch script (one fixes its EOO demodulator, which returned
 uninitialised memory and made callsign decoding hit-and-miss).
+`FreeDVReporter` (`Sources/Kymara/FreeDVReporter/`, owned by `RadioController`, settings under their own key)
+reports RADE reception to qso.freedv.org as a receive-only station, following freedv-backend's `FreeDVReporter.cpp`:
+Socket.IO over a websocket (`SocketIOClient`, a minimal client, no polling transport), auth with callsign, locator
+and `rx_only`, then after the server's `connection_successful` `freq_change`/`tx_report`/`message_update`, and
+`rx_report` per decoded callsign (a changed message is sent with `message_update`, without reconnecting) plus an empty-callsign one every 10 s while in sync (as freedv-gui does).
+`RadioController.updateMeter` drives it: connected only while running in RADE mode on a real receiver (not a
+file or demo source, which would put false reports on the map); frequency and settings changes are sent once they
+have settled for 1 s.
 
 **DX cluster** (`Sources/Kymara/DXCluster/`). `DXHeatProvider` (behind the `SpotProvider` protocol) reads
 `https://dxheat.com/source/spots/`, the undocumented JSON endpoint DXHeat's own page polls: frequency in kHz as a
