@@ -6,6 +6,25 @@
         <link>https://github.com/jorith88/kymara-sdr</link>
         <!-- items -->
         <item>
+            <title>Kymara 1.0.0-beta.6</title>
+            <pubDate>Sat, 10 Oct 2026 13:09:01 +0000</pubDate>
+            <sparkle:version>6</sparkle:version>
+            <sparkle:shortVersionString>1.0.0-beta.6</sparkle:shortVersionString>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>New</h2>
+<ul>
+<li><strong>FreeDV RADE digital voice (receive).</strong> A new <strong>RADE</strong> mode (⌘8) decodes FreeDV's Radio Autoencoder (RADE V1) signals. The sideband follows the usual convention automatically (LSB below 10 MHz except 60 m, USB above) or can be set by hand. The sidebar shows the decoder state (sync, SNR, frequency offset), the VFO bar shows a RADE badge while in sync, and the sender's callsign is decoded from the end-of-over frame.</li>
+</ul>
+<h2>Improvements</h2>
+<ul>
+<li>The passband is no longer tinted in the waterfall, so weak signals inside it are as easy to see as anywhere else. Its edges are still marked, and the spectrum keeps its tint.</li>
+<li>Audio keeps playing when the output device changes (headphones, AirPlay, another device in Sound settings) while the radio is running.</li>
+<li>The app now includes the license texts of all bundled libraries (librtlsdr, libusb, Sparkle, RADE, Opus).</li>
+</ul>]]></description>
+            <enclosure url="https://github.com/jorith88/kymara-sdr/releases/download/v1.0.0-beta.6/Kymara-1.0.0-beta.6.dmg" sparkle:edSignature="nVTga6ceZI8bs+5h+/WfR+MPYsIIyAjQAXwqpMHN0FvAN3TafNcGtDFRpDLJ+qaIg529HBOSOKjy3cluNbC+Dw==" length="11862993" type="application/octet-stream"/>
+        </item>
+        <item>
             <title>Kymara 1.0.0-beta.5</title>
             <pubDate>Sat, 10 Oct 2026 07:41:21 +0000</pubDate>
             <sparkle:version>5</sparkle:version>
