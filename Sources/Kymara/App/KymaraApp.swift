@@ -93,7 +93,7 @@ struct KymaraApp: App {
                     .keyboardShortcut("f")
                 Divider()
                 // Toggles rather than buttons so the menu shows a checkmark on the current mode.
-                ForEach(Array(DemodMode.allCases.enumerated()), id: \.element) { i, m in
+                ForEach(Array(DemodMode.available.enumerated()), id: \.element) { i, m in
                     Toggle(m.rawValue, isOn: Binding(get: { radio.mode == m }, set: { if $0 { radio.mode = m } }))
                         .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: .command)
                 }

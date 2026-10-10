@@ -102,10 +102,8 @@ fragment float4 waterfallFragment(VOut in [[stage_in]],
     float luma = dot(c.rgb, float3(0.299, 0.587, 0.114));
     float3 contrast = luma > 0.5 ? float3(0.0) : float3(1.0);
     float lo = min(u.filterStart, u.filterEnd), hi = max(u.filterStart, u.filterEnd);
-    if (xs >= lo && xs <= hi) {
-        c.rgb = u.light > 0.5 ? mix(c.rgb, float3(0.0, 0.25, 0.6), 0.14) : mix(c.rgb, float3(0.75, 0.85, 1.0), 0.16);
-    }
-    // Passband edges, 1 pt wide.
+    // Passband edges, 1 pt wide. The passband itself is not tinted (unlike in the spectrum),
+    // so weak signals inside it stay as visible as elsewhere in the waterfall.
     float edge = min(abs(xs - lo), abs(xs - hi));
     if (hi - lo > px * 4.0 && edge < px * u.scale * 0.5) {
         c.rgb = mix(c.rgb, contrast, 0.6);

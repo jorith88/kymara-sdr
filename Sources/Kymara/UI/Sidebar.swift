@@ -137,7 +137,7 @@ struct ReceiverPanel: View {
         Panel("Receiver", systemImage: "dial.medium") {
             Row("Mode") {
                 Picker("Mode", selection: $radio.mode) {
-                    ForEach(DemodMode.allCases) { Text($0.rawValue).tag($0) }
+                    ForEach(DemodMode.available) { Text($0.rawValue).tag($0) }
                 }
                 .labelsHidden()
             }
@@ -154,7 +154,26 @@ struct ReceiverPanel: View {
                 .labelsHidden()
             }
 
-            if radio.mode != .wfm && radio.mode != .nfm {
+            if radio.mode == .rade {
+                Row("Sideband") {
+                    Picker("Sideband", selection: $radio.radeSideband) {
+                        ForEach(RADESideband.allCases) { s in
+                            Text(s == .auto ? "Auto (\(RADESideband.auto.isLSB(at: radio.vfoFrequency) ? "LSB" : "USB"))" : s.rawValue)
+                                .tag(s)
+                        }
+                    }
+                    .labelsHidden()
+                    .help("FreeDV uses LSB below 10 MHz (except 60 m) and USB above")
+                }
+                Row("Decoder") {
+                    RADEStatusLabel()
+                }
+                Row("Callsign") {
+                    RADECallsignLabel()
+                }
+            }
+
+            if radio.mode != .wfm && radio.mode != .nfm && radio.mode != .rade {
                 Row("AGC") {
                     Picker("AGC", selection: $radio.agcMode) {
                         ForEach(AGCMode.allCases) { Text($0.rawValue).tag($0) }
@@ -253,6 +272,37 @@ private struct RDSStatusLabel: View {
             Text(radio.rds.trimmedProgramService.isEmpty ? "synchronised" : radio.rds.trimmedProgramService)
                 .font(.caption2)
                 .foregroundStyle(Theme.green)
+        }
+    }
+}
+
+private struct RADEStatusLabel: View {
+    @Environment(RadioController.self) private var radio
+
+    var body: some View {
+        if let s = radio.rade, s.sync {
+            Text(String(format: "sync  ·  SNR %.0f dB  ·  %+.0f Hz", s.snrDB, s.frequencyOffset))
+                .font(.caption2)
+                .monospacedDigit()
+                .foregroundStyle(Theme.green)
+        } else {
+            Text("searching").font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct RADECallsignLabel: View {
+    @Environment(RadioController.self) private var radio
+
+    var body: some View {
+        if let call = radio.radeCallsign {
+            Text(call)
+                .font(.callout.monospaced().weight(.semibold))
+                .textSelection(.enabled)
+                .help("Sent at the end of the last over")
+        } else {
+            Text("none yet").font(.caption2).foregroundStyle(.secondary)
+                .help("FreeDV sends the callsign at the end of each over")
         }
     }
 }

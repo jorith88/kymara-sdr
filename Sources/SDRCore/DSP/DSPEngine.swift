@@ -23,6 +23,8 @@ public struct DSPConfig: Equatable, Sendable {
     public var stereo = true
     public var rds = true
     public var cwPitch: Double = 700
+    /// RADE mode: the signal is in LSB (resolved from `RADESideband` by the caller, which knows the frequency).
+    public var radeLSB = false
     public var dcCorrection = true
     public var swapIQ = false
     public var fftSize = 8192
@@ -46,6 +48,8 @@ public struct DSPStatus: Sendable {
     public var overload = false
     public var samplesPerSecond: Double = 0
     public var rds = RDSInfo()
+    /// RADE decoder state (RADE mode only).
+    public var rade: RADEStatus?
 }
 
 /// The receive chain. `process` is called from the source thread; configuration is applied from any thread.
@@ -95,6 +99,7 @@ public final class DSPEngine: @unchecked Sendable {
     private var fm = FMDemodulator()
     private var stereo: StereoDecoder?
     private var rds: RDSDecoder?
+    private var rade: RADEDecoder?
     private var rdsResetPending = false
     private var monoDecimator = RealDecimator(factor: 1, taps: [1])
     private var agc = AGC(sampleRate: 48_000)
@@ -189,6 +194,7 @@ public final class DSPEngine: @unchecked Sendable {
             agc = AGC(sampleRate: ra)
             dcBlock = DCBlocker(cutoff: 40, sampleRate: ra)
             nfmAudio = NFMAudio(sampleRate: ra)
+            rade = c.mode == .rade ? RADEDecoder(rate: ra) : nil
             squelchDelay = DelayLine(delay: c.mode == .nfm ? Int(0.02 * ra) : 0)
             mixer = Mixer()
             cwMixer = Mixer()
@@ -198,7 +204,7 @@ public final class DSPEngine: @unchecked Sendable {
             audioRing.reset(sampleRate: ra)
             if recorder.isRecordingAudio { recorder.stopAudio() }
         }
-        if structural || previous!.bandwidth != c.bandwidth {
+        if structural || previous!.bandwidth != c.bandwidth || previous!.radeLSB != c.radeLSB {
             buildChannelFilter(c)
         }
         if structural {
@@ -229,7 +235,7 @@ public final class DSPEngine: @unchecked Sendable {
         } else {
             let ra = rates.audioRate
             let bw = min(max(c.bandwidth, range.lowerBound), 0.84 * ra)
-            let edges = c.mode.filterEdges(bandwidth: bw)
+            let edges = c.mode.filterEdges(bandwidth: bw, lsb: c.radeLSB)
             let lo = max(edges.lo, -0.45 * ra), hi = min(edges.hi, 0.45 * ra)
             let transition = max(60, 0.1 * bw) / ra
             if lo == -hi {
@@ -421,6 +427,7 @@ public final class DSPEngine: @unchecked Sendable {
         let agcGain = agc.currentGainDB
         let locked = stereo?.locked ?? false
         let rdsInfo = c.mode == .wfm && c.rds ? rds?.info : nil
+        let radeStatus = rade?.status
         let open = squelchOpen
         let snr: Float? = isFM ? snrDB : nil
         let audioRate = rates.audioRate
@@ -434,6 +441,7 @@ public final class DSPEngine: @unchecked Sendable {
             currentStatus.overload = overload
             if let measuredRate { currentStatus.samplesPerSecond = measuredRate }
             currentStatus.rds = rdsInfo ?? RDSInfo()
+            currentStatus.rade = radeStatus
         }
     }
 
@@ -530,7 +538,7 @@ public final class DSPEngine: @unchecked Sendable {
     private func demodulateNarrow(_ n: Int, _ c: DSPConfig) {
         let ra = rates.audioRate
         let useNotch = c.autoNotch && c.mode.supportsAutoNotch
-        let edges = c.mode.filterEdges(bandwidth: c.bandwidth)
+        let edges = c.mode.filterEdges(bandwidth: c.bandwidth, lsb: c.radeLSB)
         let notchMax = max(abs(edges.lo), abs(edges.hi))
         left.withUnsafeMutableBufferPointer { lp in
             let out = lp.baseAddress!
@@ -560,6 +568,9 @@ public final class DSPEngine: @unchecked Sendable {
                         cwMixer.mix(re: mre, im: mim, count: n, frequency: -c.cwPitch, sampleRate: ra)
                         out.update(from: re, count: n)
                         agc.process(out, count: n, mode: c.agcMode, manualGainDB: c.afGainDB)
+                    case .rade:
+                        // The vocoder's output has a fixed level, so no AGC.
+                        rade?.process(re: re, im: im, count: n, lsb: c.radeLSB, output: out)
                     case .wfm:
                         break
                     }

@@ -17,6 +17,7 @@ swift test -c release --filter RDSTests        # one test class
 swift test -c release --filter DSPTests/testEngineWFMEndToEnd   # one test
 KYMARA_HARDWARE_TESTS=1 swift test -c release --filter SDRplayTests   # include the test with an attached RSP
 KYMARA_NETWORK_TESTS=1 swift test -c release --filter DXClusterTests  # include the test that fetches from dxheat.com
+./scripts/fetch-rade.sh                        # fetch the FreeDV RADE + Opus sources (not checked in) to enable RADE mode
 ./scripts/build-app.sh                         # → build/Kymara.app (bundles librtlsdr + libusb, ad-hoc signed)
 ./scripts/make-dmg.sh [version]                # → build/Kymara-<version>.dmg (for GitHub releases)
 swift run -c release Kymara                    # run unbundled (uses a separate UserDefaults domain "Kymara")
@@ -24,7 +25,7 @@ rtl_sdr -f 99000000 -s 2400000 -g 40 -n 19200000 out.cu8   # record raw IQ from 
 ```
 
 `scripts/check-sdrplay-shim.sh` checks `Sources/CSDRplay/include/sdrplay_shim.h` against the installed SDRplay API headers (run after an API upgrade). `scripts/check-licenses.sh` checks that the README's bundled-libraries table
-matches the librtlsdr, libusb and Sparkle versions in `build/Kymara.app` (run by `/release`). `scripts/make-icon.swift` regenerates `Resources/AppIcon.icns`. There is no linter. Releases: `/release <version>` (`.claude/skills/release/SKILL.md`) merges `develop` into `main`, tests, bumps the version, builds the DMG, tags, publishes a GitHub release and fast-forwards `develop` to `main`.
+matches the librtlsdr, libusb, Sparkle and RADE versions in `build/Kymara.app` and that the app carries the license texts of all bundled libraries (run by `/release`). `scripts/make-icon.swift` regenerates `Resources/AppIcon.icns`. There is no linter. Releases: `/release <version>` (`.claude/skills/release/SKILL.md`) merges `develop` into `main`, tests, bumps the version, builds the DMG, tags, publishes a GitHub release and fast-forwards `develop` to `main`.
 
 ## Architecture
 
@@ -52,6 +53,21 @@ The feed is `appcast.xml` on `main` (`SUFeedURL` in Info.plist); `scripts/update
 release, with pre-releases in the `beta` channel (`allowedChannels`, the "Include pre-releases" setting). The EdDSA
 private key is in the login keychain; its public half is `SUPublicEDKey`. Never replace the key: installed copies
 only accept updates signed with it. The updater is off when running unbundled (`swift run`).
+
+**RADE** (FreeDV digital voice, V1) is the `rade` mode: the channel (USB, or LSB conjugated to USB orientation;
+`RADESideband` auto follows the SSB convention, LSB below 10 MHz except 60 m, and is resolved to `DSPConfig.radeLSB`
+by `RadioController`, since the engine doesn't know the absolute frequency) is resampled to 8 kHz complex, decoded by
+the rade_c C port plus Opus's FARGAN vocoder (`CRADE`, wrapper `kymara_rade.c`), and the 16 kHz speech is resampled
+back to the channel rate through a FIFO that smooths the ~120 ms frame bursts (`RADEDecoder`). The wrapper drives
+rade_c's V1 receiver directly, not through `rade_api.c`, which would also link the encoder and V2 models (~16 MB);
+the fetch script copies only the V1 receiver sources. The library sources (~45 MB of model weights) live in
+`Sources/CRADE/vendor`, fetched at pinned commits by `scripts/fetch-rade.sh` and git-ignored; without them
+`kymara_rade.c` compiles to stubs (`__has_include`) and `DemodMode.available` hides RADE. `build-app.sh` runs
+`fetch-rade.sh --if-needed` (refetches when the pins, the script or the patches change) and fails if the binary lacks
+the decoder, so a release can't ship without RADE.
+The end-of-over callsign is decoded by freedv-backend's `rade_text.cpp` (LDPC(112,56), CRC8), also fetched. Fixes to
+rade_c live in `scripts/patches/` and are applied by the fetch script (one fixes its EOO demodulator, which returned
+uninitialised memory and made callsign decoding hit-and-miss).
 
 **DX cluster** (`Sources/Kymara/DXCluster/`). `DXHeatProvider` (behind the `SpotProvider` protocol) reads
 `https://dxheat.com/source/spots/`, the undocumented JSON endpoint DXHeat's own page polls: frequency in kHz as a

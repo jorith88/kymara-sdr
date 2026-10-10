@@ -35,7 +35,8 @@ A release is made from `main` with everything on `develop` merged in.
 
 ## 3. Test
 
-`swift test -c release`. All tests must pass. rtk filters the output, so read the per-suite totals with
+First `./scripts/fetch-rade.sh --if-needed`: without the RADE sources the RADE tests are skipped instead of run.
+Then `swift test -c release`. All tests must pass, and the RADE tests must not be skipped. rtk filters the output, so read the per-suite totals with
 `rtk proxy swift test -c release 2>&1 | grep -E "Test Suite '.*' (passed|failed)|Executed"`.
 
 ## 4. Set the version in `Resources/Info.plist`
@@ -58,10 +59,12 @@ more, the file was hand-edited: commit the reformat separately first.
   symlink, `Contents/Frameworks` must contain `librtlsdr.0.dylib`, `libusb-1.0.0.dylib` and `Sparkle.framework`,
   the app's Info.plist must have the new `CFBundleVersion`, and `codesign -v --deep` must pass. Detach it afterwards.
 
-If librtlsdr was not bundled (the build prints a warning), stop: the release would need Homebrew.
+If librtlsdr was not bundled (the build prints a warning), stop: the release would need Homebrew. The build itself
+stops if the RADE decoder is missing.
 
 Then run `./scripts/check-licenses.sh`. It checks that the bundled-libraries table in `README.md` lists the versions
-of librtlsdr, libusb and Sparkle that the app ships (the GPL requires pointing to the exact librtlsdr source). If it
+of librtlsdr, libusb and Sparkle that the app ships (the GPL requires pointing to the exact librtlsdr source) and the
+RADE commits, and that the app carries the license texts of all bundled libraries. If it
 reports a mismatch, replace the rows it names in `README.md` with the rows it prints, run it again until it passes,
 and include `README.md` in the release commit (step 8).
 
