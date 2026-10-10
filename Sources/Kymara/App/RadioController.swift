@@ -120,6 +120,7 @@ final class RadioController {
     var peakHold = false { didSet { scheduleSave() } }
     var fillSpectrum = true { didSet { scheduleSave() } }
     var showBookmarks = true { didSet { scheduleSave() } }
+    var sidePanelTab: SidePanelTab = .favourites { didSet { scheduleSave() } }
     var showRDSPanel = true { didSet { scheduleSave() } }
     /// Spectrum share of the spectrum + waterfall height.
     var spectrumFraction: Double = 320.0 / 740.0 { didSet { scheduleSave() } }
@@ -666,7 +667,24 @@ final class RadioController {
     func recall(_ b: Bookmark) {
         mode = b.mode
         bandwidth = min(b.bandwidth, maxBandwidth)
-        tune(to: b.frequency)
+        jump(to: b.frequency)
+    }
+
+    /// Tunes to a DX spot in its mode, keeping the bandwidth last used in that mode.
+    func tune(to spot: DXSpot) {
+        mode = spot.demodMode
+        jump(to: spot.frequency)
+    }
+
+    func addBookmark(_ spot: DXSpot) {
+        let mode = spot.demodMode
+        let bw = mode == self.mode ? bandwidth : min(bandwidths[mode.rawValue] ?? mode.defaultBandwidth, maxBandwidth)
+        bookmarks.append(Bookmark(name: spot.dxCall, frequency: spot.frequency, mode: mode, bandwidth: bw, group: "DX"))
+    }
+
+    /// Tunes to a frequency picked from a list, bringing it into view when zoomed in.
+    private func jump(to frequency: Double) {
+        tune(to: frequency)
         if zoom > 1 { viewOffset = vfoFrequency - centerFrequency; clampView() }
     }
 
@@ -745,6 +763,7 @@ final class RadioController {
         fillSpectrum = s.fillSpectrum
         meterCalibration = s.meterCalibration
         showBookmarks = s.showBookmarks
+        sidePanelTab = s.sidePanelTab
         showRDSPanel = s.showRDSPanel
         spectrumFraction = min(max(s.spectrumFraction, 0.05), 0.95)
         displayTheme = s.displayTheme
@@ -804,6 +823,7 @@ final class RadioController {
         s.fillSpectrum = fillSpectrum
         s.meterCalibration = meterCalibration
         s.showBookmarks = showBookmarks
+        s.sidePanelTab = sidePanelTab
         s.showRDSPanel = showRDSPanel
         s.spectrumFraction = spectrumFraction
         s.displayTheme = displayTheme

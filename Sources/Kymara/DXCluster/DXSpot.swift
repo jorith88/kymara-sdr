@@ -30,17 +30,49 @@ struct DXSpot: Identifiable, Hashable, Sendable {
     /// The demodulator to tune this spot with.
     var demodMode: DemodMode { Self.demodMode(reported: reportedMode, frequency: frequency, comment: comment) }
 
+    var category: DXSpotCategory {
+        if Self.isDigital(reported: reportedMode, frequency: frequency, comment: comment) { return .digital }
+        return demodMode == .cw ? .cw : .phone
+    }
+
+    private static let digitalModes: Set<String> = ["DIGITAL", "DIGI", "FT8", "FT4", "JS8", "RTTY", "PSK", "PSK31"]
+
+    /// Standard FT8 and FT4 dial frequencies in kHz, 160 m to 6 m.
+    private static let digitalDials: [Double] = [
+        1_840, 3_573, 3_575, 5_357, 7_047.5, 7_074, 10_136, 10_140, 14_074, 14_080,
+        18_100, 18_104, 21_074, 21_140, 24_915, 24_919, 28_074, 28_180, 50_313, 50_318,
+    ]
+
+    /// A digital-mode spot: reported as one, named in the comment, or (with no mode reported)
+    /// within the audio passband above a standard FT8/FT4 dial frequency.
+    static func isDigital(reported: String?, frequency: Double, comment: String) -> Bool {
+        guard let reported = reported?.uppercased(), !reported.isEmpty else {
+            let words = commentWords(comment)
+            if words.contains("CW") || words.contains("SSB") { return false }
+            if words.contains(where: { digitalModes.contains(String($0)) }) { return true }
+            let kHz = frequency / 1_000
+            return digitalDials.contains { (0...3.5).contains(kHz - $0) }
+        }
+        return digitalModes.contains(reported)
+    }
+
+    private static func commentWords(_ comment: String) -> Set<Substring> {
+        Set(comment.uppercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }))
+    }
+
+    /// Digital modes (FT8, RTTY, PSK, …) are all received in USB, whatever the band. Without a
+    /// reported mode, the comment ("CW", "FM"), the FT8/FT4 frequencies or else the sideband
+    /// convention decides.
     static func demodMode(reported: String?, frequency: Double, comment: String) -> DemodMode {
+        if isDigital(reported: reported, frequency: frequency, comment: comment) { return .usb }
         switch reported?.uppercased() {
         case "CW": return .cw
         case "USB": return .usb
         case "LSB": return .lsb
         case "AM": return .am
         case "FM": return .nfm
-        // FT8, RTTY, PSK and friends are all received in USB, whatever the band.
-        case "DIGITAL", "DIGI", "FT8", "FT4", "RTTY", "PSK", "PSK31": return .usb
         default:
-            let words = comment.uppercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+            let words = commentWords(comment)
             if words.contains("CW") { return .cw }
             if words.contains("FM") { return .nfm }
             return sidebandConvention(frequency)
@@ -66,4 +98,11 @@ struct DXSpot: Identifiable, Hashable, Sendable {
         if let m = other.reportedMode { reportedMode = m }
         if let l = other.locator { locator = l }
     }
+}
+
+enum DXSpotCategory: String, CaseIterable, Identifiable, Codable, Sendable {
+    case cw = "CW"
+    case phone = "Phone"
+    case digital = "Digital"
+    var id: String { rawValue }
 }

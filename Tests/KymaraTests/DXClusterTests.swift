@@ -84,11 +84,15 @@ final class DXClusterTests: XCTestCase {
         XCTAssertEqual(mode("DIGITAL", 7_074_000), .usb, "digital modes use USB on every band")
         XCTAssertEqual(mode(nil, 7_155_000), .lsb)
         XCTAssertEqual(mode(nil, 14_250_000), .usb)
-        XCTAssertEqual(mode(nil, 5_357_000), .usb, "60 m uses USB")
-        XCTAssertEqual(mode(nil, 1_840_000), .lsb)
+        XCTAssertEqual(mode(nil, 5_363_000), .usb, "60 m uses USB")
+        XCTAssertEqual(mode(nil, 1_850_000), .lsb)
         XCTAssertEqual(mode(nil, 7_020_000, "tnx cw qso"), .cw)
         XCTAssertEqual(mode(nil, 7_020_000, "cwops"), .lsb, "only a whole word counts")
         XCTAssertEqual(mode(nil, 29_600_000, "FM simplex"), .nfm)
+        XCTAssertEqual(mode(nil, 7_074_800), .usb, "FT8 segment")
+        XCTAssertEqual(mode(nil, 7_074_800, "ssb net"), .lsb, "unless the comment says otherwise")
+        XCTAssertEqual(mode(nil, 7_160_000, "js8 call"), .usb)
+        XCTAssertEqual(mode("LSB", 7_074_500), .lsb, "a reported mode wins")
     }
 
     func testMergeKeepsNewestAndCollectsSpotters() {
@@ -171,6 +175,51 @@ final class DXClusterTests: XCTestCase {
         await store.refresh()
         XCTAssertNil(store.lastError)
         XCTAssertEqual(store.nextDelay, 60)
+    }
+
+    func testCategory() {
+        var s = spot("DL1AA", 14_200_000, now)
+        s.reportedMode = "DIGITAL"
+        XCTAssertEqual(s.category, .digital)
+        s.reportedMode = "CW"
+        XCTAssertEqual(s.category, .cw)
+        s.reportedMode = nil
+        XCTAssertEqual(s.category, .phone)
+        s.comment = "cw 599"
+        XCTAssertEqual(s.category, .cw)
+        s.comment = ""
+        s.frequency = 14_075_200
+        XCTAssertEqual(s.category, .digital, "FT8 segment without a reported mode")
+    }
+
+    @MainActor
+    func testListFilters() async {
+        let provider = FakeProvider()
+        let store = DXClusterStore(provider: provider, now: { self.now })
+        var digital = spot("JA1XX", 14_074_000, utc(5, 58))
+        digital.reportedMode = "DIGITAL"
+        var cw = spot("OH0Z", 14_025_000, utc(5, 57), spotter: "PA3ABC", comment: "up 1")
+        cw.reportedMode = "CW"
+        provider.result = .success([digital, cw, spot("VK2YY", 7_150_000, utc(5, 56))])
+        await store.refresh()
+
+        let tuner = 13_000_000.0...15_000_000.0, view = 7_000_000.0...7_200_000.0
+        func calls(_ search: String = "") -> [String] {
+            store.filteredSpots(search: search, tuner: tuner, view: view).map(\.dxCall)
+        }
+        XCTAssertEqual(calls(), ["JA1XX", "OH0Z", "VK2YY"])
+        XCTAssertEqual(calls("oh0"), ["OH0Z"])
+        XCTAssertEqual(calls("pa3"), ["OH0Z"], "search matches spotters")
+        XCTAssertEqual(calls("UP 1"), ["OH0Z"], "search matches comments")
+        XCTAssertEqual(calls("7.150"), ["VK2YY"], "search matches frequencies")
+
+        store.scope = .tuner
+        XCTAssertEqual(calls(), ["JA1XX", "OH0Z"])
+        store.scope = .view
+        XCTAssertEqual(calls(), ["VK2YY"])
+        store.scope = .all
+        store.categories = [.cw, .digital]
+        XCTAssertEqual(calls(), ["JA1XX", "OH0Z"])
     }
 
     @MainActor

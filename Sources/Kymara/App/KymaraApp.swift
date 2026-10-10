@@ -24,11 +24,13 @@ struct KymaraApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var radio = RadioController()
     @State private var updater = Updater()
+    @State private var dxCluster = DXClusterStore()
 
     var body: some Scene {
         Window("Kymara", id: "main") {
             ContentView()
                 .environment(radio)
+                .environment(dxCluster)
                 .frame(minWidth: 1180, minHeight: 680)
                 .onAppear {
                     let radio = radio

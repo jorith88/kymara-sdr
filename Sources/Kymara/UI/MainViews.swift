@@ -196,7 +196,7 @@ struct ContentView: View {
                 }
                 if radio.showBookmarks {
                     Rectangle().fill(Theme.border).frame(width: 1)
-                    BookmarksView()
+                    SidePanel()
                         .frame(width: 230)
                 }
             }

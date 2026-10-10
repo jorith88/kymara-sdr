@@ -28,6 +28,11 @@ final class DXClusterStore {
         didSet { if continents != oldValue { spots = []; restartPolling() } }
     }
 
+    // List filters, applied locally.
+    var scope: DXSpotScope = .all
+    /// Spot categories to show; empty means all.
+    var categories: Set<DXSpotCategory> = []
+
     @ObservationIgnored let provider: SpotProvider
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private var pollTask: Task<Void, Never>?
@@ -44,6 +49,24 @@ final class DXClusterStore {
     /// Spots between two frequencies (Hz), newest first.
     func spots(in range: ClosedRange<Double>) -> [DXSpot] {
         spots.filter { range.contains($0.frequency) }
+    }
+
+    /// Spots passing the list filters. `tuner` and `view` are the frequency ranges the scopes refer to.
+    func filteredSpots(search: String, tuner: ClosedRange<Double>, view: ClosedRange<Double>) -> [DXSpot] {
+        let range: ClosedRange<Double>? = switch scope {
+        case .all: nil
+        case .tuner: tuner
+        case .view: view
+        }
+        let needle = search.trimmingCharacters(in: .whitespaces).uppercased()
+        return spots.filter { spot in
+            if let range, !range.contains(spot.frequency) { return false }
+            if !categories.isEmpty, !categories.contains(spot.category) { return false }
+            guard !needle.isEmpty else { return true }
+            return spot.dxCall.uppercased().contains(needle) || spot.comment.uppercased().contains(needle)
+                || spot.spotters.contains { $0.uppercased().contains(needle) }
+                || FrequencyFormat.dotted(spot.frequency).contains(needle)
+        }
     }
 
     /// Fetches once and merges the result. Errors are kept in `lastError`; existing spots stay.
@@ -125,4 +148,11 @@ final class DXClusterStore {
             }
         }
     }
+}
+
+enum DXSpotScope: String, CaseIterable, Identifiable, Codable, Sendable {
+    case all = "All Spots"
+    case tuner = "Tuner Range"
+    case view = "Visible Span"
+    var id: String { rawValue }
 }
