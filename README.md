@@ -87,7 +87,7 @@ and unreadable data is backed up instead of overwritten.
 
 Frequency display: scroll over a digit to change it, click its upper/lower half for +/−,
 double-click or type a number (⌘F) to enter a frequency (`145.5`, `7100k`, `1.09G`).
-Shortcuts: ⌘R start/stop, ⌘1–7 modes, ⌘D add favourite, ⌘=/⌘−/⌘0 zoom, ⇧⌘A/⇧⌘I record, ⇧⌘L DX spot labels.
+Shortcuts: ⌘R start/stop, ⌘1–7 modes, ⌘D add favourite, ⌘=/⌘−/⌘0 zoom, ⇧⌘A/⇧⌘I record, ⌥⌘B/⌥⌘X favourites/DX spots, ⇧⌘L DX spot labels.
 
 ## Architecture
 
