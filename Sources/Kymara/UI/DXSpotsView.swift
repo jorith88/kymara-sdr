@@ -130,6 +130,23 @@ private struct DXSpotRow: View {
     }
 
     var body: some View {
+        HStack(spacing: 7) {
+            // The mode category, as on the spectrum labels. White on a focused (accent) selection.
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(prominence == .increased ? AnyShapeStyle(.primary) : AnyShapeStyle(spot.category.color))
+                .frame(width: 3)
+                .accessibilityHidden(true)
+            details
+        }
+        // Lets the stripe take the height of the text.
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.vertical, 1)
+        .help(spot.spotters.isEmpty ? "" : "Spotted by \(spot.spotters.joined(separator: ", "))")
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(active ? .isSelected : [])
+    }
+
+    private var details: some View {
         VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 4) {
                 if let flag { Text(flag).accessibilityHidden(true) }
@@ -160,10 +177,6 @@ private struct DXSpotRow: View {
                     .lineLimit(1)
             }
         }
-        .padding(.vertical, 1)
-        .help(spot.spotters.isEmpty ? "" : "Spotted by \(spot.spotters.joined(separator: ", "))")
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(active ? .isSelected : [])
     }
 }
 
