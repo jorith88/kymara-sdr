@@ -249,9 +249,12 @@ private struct DXClusterStatus: View {
 
     private var state: (color: Color, text: String) {
         if cluster.isPaused { return (.gray, "paused") }
-        if cluster.lastError != nil { return (Theme.amber, cluster.spots.isEmpty ? "offline" : "\(cluster.spots.count) spots, offline") }
+        let count = cluster.shownCount
+        if cluster.lastError != nil {
+            return (Theme.amber, count == 0 ? "offline" : "\(DXClusterStore.spotCount(count)), offline")
+        }
         if cluster.lastUpdate == nil { return (.gray, "connecting") }
-        return (Theme.green, "\(cluster.spots.count) spots")
+        return (Theme.green, DXClusterStore.spotCount(count))
     }
 
     var body: some View {

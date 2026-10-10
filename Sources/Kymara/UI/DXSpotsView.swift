@@ -10,15 +10,16 @@ struct DXSpotsView: View {
 
     var body: some View {
         if cluster.isEnabled {
+            let spots = cluster.filteredSpots(search: search, tuner: tunerRange, view: viewRange)
             VStack(spacing: 0) {
                 HStack(spacing: 4) {
                     SearchField(text: $search, prompt: "Filter")
                     DXFilterMenu()
                 }
                 .padding(6)
-                spotList
+                spotList(spots)
                 Rectangle().fill(Theme.border).frame(height: 1)
-                DXStatusLine()
+                DXStatusLine(count: spots.count)
             }
         } else {
             ContentUnavailableView {
@@ -31,8 +32,7 @@ struct DXSpotsView: View {
         }
     }
 
-    @ViewBuilder private var spotList: some View {
-        let spots = cluster.filteredSpots(search: search, tuner: tunerRange, view: viewRange)
+    @ViewBuilder private func spotList(_ spots: [DXSpot]) -> some View {
         if spots.isEmpty {
             ContentUnavailableView {
                 Label(emptyTitle, systemImage: "binoculars")
@@ -219,6 +219,8 @@ private struct DXFilterMenu: View {
 
 private struct DXStatusLine: View {
     @Environment(DXClusterStore.self) private var cluster
+    /// Spots in the list.
+    let count: Int
 
     var body: some View {
         HStack(spacing: 4) {
@@ -227,7 +229,7 @@ private struct DXStatusLine: View {
                     .foregroundStyle(.orange)
                     .lineLimit(2)
             } else if let updated = cluster.lastUpdate {
-                Text("\(cluster.spots.count) spots · updated \(updated.formatted(date: .omitted, time: .shortened))")
+                Text("\(DXClusterStore.spotCount(count)) · updated \(updated.formatted(date: .omitted, time: .shortened))")
             } else {
                 Text("Connecting to \(cluster.providerName)…")
             }

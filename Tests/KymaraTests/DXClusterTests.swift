@@ -247,6 +247,9 @@ final class DXClusterTests: XCTestCase {
         // The spectrum labels use the same mode filter.
         store.categories = [.phone]
         XCTAssertEqual(store.spots(in: 7_000_000...15_000_000).map(\.dxCall), ["VK2YY"])
+        XCTAssertEqual(store.shownCount, 1, "counts only the spots the filters let through")
+        XCTAssertEqual(DXClusterStore.spotCount(1), "1 spot")
+        XCTAssertEqual(DXClusterStore.spotCount(3), "3 spots")
     }
 
     @MainActor

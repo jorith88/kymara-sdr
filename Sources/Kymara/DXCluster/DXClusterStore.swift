@@ -98,6 +98,11 @@ final class DXClusterStore {
             && (continents.isEmpty || continents.contains(spot.dxContinent))
     }
 
+    static func spotCount(_ n: Int) -> String { n == 1 ? "1 spot" : "\(n) spots" }
+
+    /// The number of spots passing the mode and continent filters.
+    var shownCount: Int { spots.count(where: isShown) }
+
     /// Shown spots between two frequencies (Hz), newest first.
     func spots(in range: ClosedRange<Double>) -> [DXSpot] {
         spots.filter { range.contains($0.frequency) && isShown($0) }
