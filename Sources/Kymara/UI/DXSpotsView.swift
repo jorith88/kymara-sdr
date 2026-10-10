@@ -107,6 +107,8 @@ struct DXSpotsView: View {
 private struct DXSpotRow: View {
     let spot: DXSpot
     let active: Bool
+    /// Increased in a selected row, whose background is the accent colour.
+    @Environment(\.backgroundProminence) private var prominence
 
     private static let timeFormat: DateFormatter = {
         let f = DateFormatter()
@@ -132,7 +134,7 @@ private struct DXSpotRow: View {
                 if let flag { Text(flag).accessibilityHidden(true) }
                 Text(spot.dxCall)
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(active ? Theme.accent : .primary)
+                    .foregroundStyle(active && prominence != .increased ? Theme.accent : .primary)
                     .lineLimit(1)
                 Spacer(minLength: 4)
                 Text(Self.timeFormat.string(from: spot.time))

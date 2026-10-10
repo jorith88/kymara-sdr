@@ -93,12 +93,14 @@ struct BookmarksView: View {
 private struct BookmarkRow: View {
     let bookmark: Bookmark
     let active: Bool
+    /// Increased in a selected row, whose background is the accent colour.
+    @Environment(\.backgroundProminence) private var prominence
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(bookmark.name)
                 .font(.body.weight(active ? .semibold : .regular))
-                .foregroundStyle(active ? Theme.accent : .primary)
+                .foregroundStyle(active && prominence != .increased ? Theme.accent : .primary)
                 .lineLimit(1)
             HStack(spacing: 6) {
                 Text(FrequencyFormat.dotted(bookmark.frequency))
