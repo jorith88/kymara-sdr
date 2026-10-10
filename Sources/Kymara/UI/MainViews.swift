@@ -230,9 +230,9 @@ struct ContentView: View {
             }
             ToolbarItem(id: "favourites", placement: .primaryAction) {
                 Toggle(isOn: $radio.showBookmarks) {
-                    Label("Favourites", systemImage: "sidebar.right")
+                    Label("Side Panel", systemImage: "sidebar.right")
                 }
-                .help("Show or hide favourites (⌥⌘B)")
+                .help("Show or hide favourites and DX spots (⌥⌘B, ⌥⌘X)")
             }
         }
         .alert("Error", isPresented: Binding(get: { radio.errorMessage != nil }, set: { if !$0 { radio.errorMessage = nil } })) {

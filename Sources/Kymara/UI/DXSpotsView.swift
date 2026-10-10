@@ -53,6 +53,8 @@ struct DXSpotsView: View {
                         .tag(spot.id)
                         .contentShape(Rectangle())
                         .onTapGesture { selection = spot.id; radio.tune(to: spot) }
+                        .accessibilityAction { radio.tune(to: spot) }
+                        .accessibilityHint("Tunes to this spot")
                         .contextMenu {
                             Button("Tune") { radio.tune(to: spot) }
                             Button("Add to Favourites") { radio.addBookmark(spot) }
@@ -69,6 +71,12 @@ struct DXSpotsView: View {
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
+            // Arrow keys move the selection; Return tunes to it.
+            .onKeyPress(.return) {
+                guard let spot = spots.first(where: { $0.id == selection }) else { return .ignored }
+                radio.tune(to: spot)
+                return .handled
+            }
         }
     }
 

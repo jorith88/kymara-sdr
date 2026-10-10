@@ -44,6 +44,8 @@ struct BookmarksView: View {
                                 .contentShape(Rectangle())
                                 .onTapGesture(count: 2) { radio.recall(b) }
                                 .onTapGesture { selection = b.id; radio.recall(b) }
+                                .accessibilityAction { radio.recall(b) }
+                                .accessibilityHint("Tunes to this favourite")
                                 .contextMenu {
                                     Button("Tune") { radio.recall(b) }
                                     Button("Edit…") { editing = b }
@@ -57,6 +59,12 @@ struct BookmarksView: View {
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
+            // Arrow keys move the selection; Return tunes to it.
+            .onKeyPress(.return) {
+                guard let b = radio.bookmarks.first(where: { $0.id == selection }) else { return .ignored }
+                radio.recall(b)
+                return .handled
+            }
             .onDeleteCommand {
                 if let id = selection, let b = radio.bookmarks.first(where: { $0.id == id }) { delete(b) }
             }

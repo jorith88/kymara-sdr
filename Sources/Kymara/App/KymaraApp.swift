@@ -26,6 +26,16 @@ struct KymaraApp: App {
     @State private var updater = Updater()
     @State private var dxCluster = DXClusterStore(persistence: SettingsStore())
 
+    /// On while the side panel shows `tab`; turning it on opens the panel on that tab.
+    private func sidePanel(_ tab: SidePanelTab) -> Binding<Bool> {
+        Binding {
+            radio.showBookmarks && radio.sidePanelTab == tab
+        } set: { on in
+            if on { radio.sidePanelTab = tab }
+            radio.showBookmarks = on
+        }
+    }
+
     var body: some Scene {
         Window("Kymara", id: "main") {
             ContentView()
@@ -65,11 +75,15 @@ struct KymaraApp: App {
                 Toggle("Show RDS Panel", isOn: $radio.showRDSPanel)
                     .keyboardShortcut("r", modifiers: [.command, .shift])
                     .disabled(radio.mode != .wfm || !radio.rdsEnabled)
-                Toggle("Show Favourites", isOn: $radio.showBookmarks)
+                Toggle("Show Favourites", isOn: sidePanel(.favourites))
                     .keyboardShortcut("b", modifiers: [.command, .option])
+                Toggle("Show DX Spots", isOn: sidePanel(.dxSpots))
+                    .keyboardShortcut("x", modifiers: [.command, .option])
                 Toggle("Show DX Spot Labels", isOn: $radio.showDXLabels)
                     .keyboardShortcut("l", modifiers: [.command, .shift])
                     .disabled(!dxCluster.isEnabled)
+                Divider()
+                Toggle("DX Cluster", isOn: $dxCluster.isEnabled)
                 Divider()
             }
             CommandMenu("Radio") {
