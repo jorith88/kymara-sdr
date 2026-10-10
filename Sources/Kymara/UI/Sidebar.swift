@@ -168,6 +168,9 @@ struct ReceiverPanel: View {
                 Row("Decoder") {
                     RADEStatusLabel()
                 }
+                Row("Callsign") {
+                    RADECallsignLabel()
+                }
             }
 
             if radio.mode != .wfm && radio.mode != .nfm && radio.mode != .rade {
@@ -284,6 +287,22 @@ private struct RADEStatusLabel: View {
                 .foregroundStyle(Theme.green)
         } else {
             Text("searching").font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct RADECallsignLabel: View {
+    @Environment(RadioController.self) private var radio
+
+    var body: some View {
+        if let call = radio.radeCallsign {
+            Text(call)
+                .font(.callout.monospaced().weight(.semibold))
+                .textSelection(.enabled)
+                .help("Sent at the end of the last over")
+        } else {
+            Text("none yet").font(.caption2).foregroundStyle(.secondary)
+                .help("FreeDV sends the callsign at the end of each over")
         }
     }
 }

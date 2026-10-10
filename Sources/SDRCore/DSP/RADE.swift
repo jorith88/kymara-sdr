@@ -33,6 +33,12 @@ public struct RADEStatus: Equatable, Sendable {
     public var snrDB: Float = 0
     /// Offset of the received signal from where it should be (Hz), valid while in sync.
     public var frequencyOffset: Float = 0
+    /// Callsign from the last end-of-over that decoded, and how many have decoded so far
+    /// (so the same callsign sent again still counts as news).
+    public var callsign: String?
+    public var callsignCount = 0
+    /// End-of-over frames seen, whether or not their callsign decoded.
+    public var endOfOvers = 0
 
     public init() {}
 }
@@ -139,6 +145,12 @@ public final class RADEDecoder {
         if status.sync {
             status.snrDB = kymara_rade_snr_db(rade)
             status.frequencyOffset = kymara_rade_frequency_offset(rade)
+        }
+        status.endOfOvers = Int(kymara_rade_end_of_overs(rade))
+        let count = Int(kymara_rade_callsign_count(rade))
+        if count != status.callsignCount {
+            status.callsignCount = count
+            status.callsign = String(cString: kymara_rade_callsign(rade))
         }
     }
 

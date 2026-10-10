@@ -60,6 +60,9 @@ the rade_c C port plus Opus's FARGAN vocoder (`CRADE`, wrapper `kymara_rade.c`),
 back to the channel rate through a FIFO that smooths the ~120 ms frame bursts (`RADEDecoder`). The library sources
 (~130 MB of model weights) live in `Sources/CRADE/vendor`, fetched at pinned commits by `scripts/fetch-rade.sh` and
 git-ignored; without them `kymara_rade.c` compiles to stubs (`__has_include`) and `DemodMode.available` hides RADE.
+The end-of-over callsign is decoded by freedv-backend's `rade_text.cpp` (LDPC(112,56), CRC8), also fetched. Fixes to
+rade_c live in `scripts/patches/` and are applied by the fetch script (one fixes its EOO demodulator, which returned
+uninitialised memory and made callsign decoding hit-and-miss).
 
 **librtlsdr** is loaded with `dlopen` (`RTLSDRLibrary`), looking in the app's Frameworks folder first, then Homebrew. It is not a link-time dependency.
 

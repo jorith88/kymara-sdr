@@ -39,6 +39,11 @@ float kymara_rade_frequency_offset(const kymara_rade *k);
 /// Number of end-of-over frames seen since opening.
 int kymara_rade_end_of_overs(const kymara_rade *k);
 
+/// The callsign from the last end-of-over that decoded (FEC converged and CRC matched), "" if none yet.
+const char *kymara_rade_callsign(const kymara_rade *k);
+/// Counts decoded callsigns, so a repeat of the same callsign can be told apart from no news.
+int kymara_rade_callsign_count(const kymara_rade *k);
+
 #ifdef __cplusplus
 }
 #endif

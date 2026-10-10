@@ -25,7 +25,13 @@ let package = Package(
                 .headerSearchPath("vendor/opus/include"),
                 .headerSearchPath("vendor/opus"),
                 .headerSearchPath("vendor/rade"),
+                .headerSearchPath("vendor/freedv/pipeline"),
                 // Third-party code, compiled as-is.
+                .unsafeFlags(["-w", "-O2"]),
+            ],
+            cxxSettings: [
+                .headerSearchPath("vendor/rade"),
+                .headerSearchPath("vendor/freedv/pipeline"),
                 .unsafeFlags(["-w", "-O2"]),
             ]
         ),
@@ -38,5 +44,6 @@ let package = Package(
                     resources: [.copy("Fixtures")]),
         .testTarget(name: "KymaraTests", dependencies: ["Kymara"], path: "Tests/KymaraTests"),
     ],
-    swiftLanguageModes: [.v5]
+    swiftLanguageModes: [.v5],
+    cxxLanguageStandard: .cxx17
 )

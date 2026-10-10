@@ -31,6 +31,13 @@ struct TopRibbon: View {
                             .foregroundStyle(Theme.green)
                             .accessibilityLabel("Stereo")
                     }
+                    if let call = radio.radeCallsign, radio.mode == .rade {
+                        Text(call)
+                            .font(.system(size: 10, weight: .bold).monospaced())
+                            .foregroundStyle(Theme.accent)
+                            .help("Callsign from the last RADE over")
+                            .accessibilityLabel("Callsign \(call)")
+                    }
                     if radio.rade?.sync == true {
                         Text("RADE")
                             .font(.system(size: 10, weight: .bold))

@@ -148,6 +148,9 @@ final class RadioController {
     private(set) var rds = RDSInfo()
     /// FreeDV RADE decoder state (RADE mode only).
     private(set) var rade: RADEStatus?
+    /// Callsign from the last RADE end-of-over on this frequency.
+    private(set) var radeCallsign: String?
+    @ObservationIgnored private var radeCallsignCount = 0
     private(set) var overload = false
     private(set) var audioLatency: Double = 0
     private(set) var measuredRate: Double = 0
@@ -455,6 +458,8 @@ final class RadioController {
     private func clearRDS() {
         engine.resetRDS()
         if rds != RDSInfo() { rds = RDSInfo() }
+        // The callsign belongs to the station just left, as RDS does.
+        if radeCallsign != nil { radeCallsign = nil }
     }
 
     private func modeChanged(from old: DemodMode) {
@@ -596,6 +601,11 @@ final class RadioController {
             return r
         }
         if rade != radeStatus { rade = radeStatus }
+        // The count restarts at 0 when the engine builds a new decoder, so any change to a non-zero count is news.
+        if let s = s.rade, s.callsignCount != radeCallsignCount {
+            if s.callsignCount > 0, let call = s.callsign, !call.isEmpty { radeCallsign = call }
+            radeCallsignCount = s.callsignCount
+        }
         let isOverloaded = s.overload || (source?.hardwareOverload ?? false)
         if overload != isOverloaded { overload = isOverloaded }
         sdrplayGainDB = (source as? SDRplaySource)?.systemGainDB

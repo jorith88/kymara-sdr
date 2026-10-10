@@ -8,8 +8,8 @@ final class RADETests: XCTestCase {
         return (x.reduce(0) { $0 + $1 * $1 } / Float(x.count)).squareRoot()
     }
 
-    /// 12 s of a real RADE V1 over as received in USB (8 kHz mono): in sync from ~0.6 s, end of over at ~10 s,
-    /// then no signal. From the rade_c repository (FDV_offair.wav).
+    /// 12 s of a real RADE V1 over as received in USB (8 kHz mono): in sync from ~0.6 s, end of over at ~10.6 s
+    /// (callsign VK5KVA), then no signal. From the rade_c repository (FDV_offair.wav).
     private func loadFixture() throws -> [Float] {
         let url = try XCTUnwrap(Bundle.module.resourceURL?.appendingPathComponent("Fixtures/rade_v1_offair_8k.wav"))
         let data = try Data(contentsOf: url)
@@ -79,6 +79,9 @@ final class RADETests: XCTestCase {
         }
         XCTAssertTrue(everSynced)
         XCTAssertGreaterThan(bestSNR, 15)
+        // The over ends with an end-of-over frame carrying the operator's callsign.
+        XCTAssertEqual(decoder.status.callsign, "VK5KVA")
+        XCTAssertEqual(decoder.status.callsignCount, 1)
         let r = Int(rate)
         let during = rms(speech[(2 * r)..<(9 * r)])
         XCTAssertGreaterThan(during, 0.02, "speech while in sync")
@@ -122,7 +125,7 @@ final class RADETests: XCTestCase {
     }
 
     /// Runs the engine in RADE mode; returns whether it synced and the audio.
-    private func receive(_ iq: [Int16], lsb: Bool) -> (synced: Bool, audio: [Float], rate: Double) {
+    private func receive(_ iq: [Int16], lsb: Bool) -> (synced: Bool, audio: [Float], rate: Double, callsign: String?) {
         let engine = DSPEngine()
         var c = DSPConfig()
         c.sampleRate = 240_000
@@ -147,7 +150,7 @@ final class RADETests: XCTestCase {
                 audioOut += tmpL
             }
         }
-        return (everSynced, audioOut, engine.status.audioRate)
+        return (everSynced, audioOut, engine.status.audioRate, engine.status.rade?.callsign)
     }
 
     /// The whole chain, in both sidebands. The wrong sideband sees a mirrored signal and must not sync.
@@ -157,6 +160,7 @@ final class RADETests: XCTestCase {
             let iq = try makeIQ(lsb: lsb)
             let right = receive(iq, lsb: lsb)
             XCTAssertTrue(right.synced, lsb ? "LSB" : "USB")
+            XCTAssertEqual(right.callsign, "VK5KVA", lsb ? "LSB" : "USB")
             let r = Int(right.rate)
             XCTAssertGreaterThan(rms(right.audio[(2 * r)..<(9 * r)]), 0.02, lsb ? "LSB" : "USB")
             XCTAssertFalse(receive(iq, lsb: !lsb).synced, lsb ? "LSB signal in USB" : "USB signal in LSB")

@@ -19,6 +19,8 @@ int kymara_rade_sync(const kymara_rade *k) { (void)k; return 0; }
 float kymara_rade_snr_db(const kymara_rade *k) { (void)k; return 0; }
 float kymara_rade_frequency_offset(const kymara_rade *k) { (void)k; return 0; }
 int kymara_rade_end_of_overs(const kymara_rade *k) { (void)k; return 0; }
+const char *kymara_rade_callsign(const kymara_rade *k) { (void)k; return ""; }
+int kymara_rade_callsign_count(const kymara_rade *k) { (void)k; return 0; }
 
 #else
 
@@ -29,6 +31,7 @@ int kymara_rade_end_of_overs(const kymara_rade *k) { (void)k; return 0; }
 #include "rade_dsp.h"
 #include "fargan.h"
 #include "lpcnet.h"
+#include "rade_text.h"
 
 /// FARGAN needs this many feature frames to prime its state before it synthesises.
 #define WARMUP_FRAMES 5
@@ -49,7 +52,21 @@ struct kymara_rade {
     float snr_db;
     float frequency_offset;
     int end_of_overs;
+
+    /// FreeDV's end-of-over text: callsign, 6-bit characters, LDPC(112,56) and CRC8.
+    rade_text_t text;
+    char callsign[16];
+    int callsign_count;
 };
+
+static void on_callsign(rade_text_t text, const char *callsign, int length, void *state) {
+    (void)text;
+    kymara_rade *k = state;
+    if (length >= (int)sizeof(k->callsign)) length = sizeof(k->callsign) - 1;
+    memcpy(k->callsign, callsign, (size_t)length);
+    k->callsign[length] = 0;
+    k->callsign_count++;
+}
 
 kymara_rade *kymara_rade_open(void) {
     kymara_rade *k = calloc(1, sizeof(kymara_rade));
@@ -71,12 +88,16 @@ kymara_rade *kymara_rade_open(void) {
         return NULL;
     }
     fargan_init(&k->fargan);
+    k->text = rade_text_create();
+    rade_text_enable_stats_output(k->text, 0);
+    rade_text_set_rx_callback(k->text, on_callsign, k);
     return k;
 }
 
 void kymara_rade_close(kymara_rade *k) {
     if (!k) return;
     if (k->rade) rade_close(k->rade);
+    if (k->text) rade_text_destroy(k->text);
     free(k->rx_in);
     free(k->features);
     free(k->eoo_bits);
@@ -123,7 +144,11 @@ int kymara_rade_process(kymara_rade *k, const float *re, const float *im, int co
 
         int has_eoo = 0;
         int n_out = rade_rx(k->rade, k->features, &has_eoo, k->eoo_bits, k->rx_in);
-        if (has_eoo) k->end_of_overs++;
+        if (has_eoo) {
+            k->end_of_overs++;
+            // eoo_bits holds QPSK symbols as I/Q pairs.
+            rade_text_rx(k->text, k->eoo_bits, rade_n_eoo_bits(k->rade) / 2);
+        }
         int sync = rade_sync(k->rade);
         if (!sync && k->sync) {
             // Lost the signal: start the vocoder afresh on the next over.
@@ -147,6 +172,8 @@ int kymara_rade_sync(const kymara_rade *k) { return k->sync; }
 float kymara_rade_snr_db(const kymara_rade *k) { return k->snr_db; }
 float kymara_rade_frequency_offset(const kymara_rade *k) { return k->frequency_offset; }
 int kymara_rade_end_of_overs(const kymara_rade *k) { return k->end_of_overs; }
+const char *kymara_rade_callsign(const kymara_rade *k) { return k->callsign; }
+int kymara_rade_callsign_count(const kymara_rade *k) { return k->callsign_count; }
 int kymara_rade_available(void) { return 1; }
 
 #endif
