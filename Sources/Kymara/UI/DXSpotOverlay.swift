@@ -69,7 +69,7 @@ struct DXSpotOverlayLayer: View {
                         if let row = placed[spot.id] {
                             DXSpotLabel(spot: spot, active: abs(spot.frequency - radio.vfoFrequency) < 500,
                                         opacity: fade(spot, now)) {
-                                radio.tune(to: spot)
+                                radio.tune(to: spot, centre: false)
                             }
                             .position(x: (spot.frequency - start) / span * w,
                                       y: Self.firstRowY + Double(row) * Self.rowHeight)

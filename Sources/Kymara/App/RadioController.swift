@@ -671,10 +671,12 @@ final class RadioController {
         jump(to: b.frequency)
     }
 
-    /// Tunes to a DX spot in its mode, keeping the bandwidth last used in that mode.
-    func tune(to spot: DXSpot) {
+    /// Tunes to a DX spot in its mode, keeping the bandwidth last used in that mode. `centre` brings
+    /// it to the middle of the view when zoomed in; without it the view only moves if the passband
+    /// would leave it (a label on the spectrum is already in view).
+    func tune(to spot: DXSpot, centre: Bool = true) {
         mode = spot.demodMode
-        jump(to: spot.frequency)
+        if centre { jump(to: spot.frequency) } else { tune(to: spot.frequency, follow: true) }
     }
 
     func addBookmark(_ spot: DXSpot) {
