@@ -52,7 +52,8 @@ struct DXSpotsView: View {
                     DXSpotRow(spot: spot, active: abs(spot.frequency - radio.vfoFrequency) < 500)
                         .tag(spot.id)
                         .contentShape(Rectangle())
-                        .onTapGesture { selection = spot.id; radio.tune(to: spot) }
+                        // Simultaneous, so the list still selects the row and takes focus.
+                        .simultaneousGesture(TapGesture().onEnded { radio.tune(to: spot) })
                         .accessibilityAction { radio.tune(to: spot) }
                         .accessibilityHint("Tunes to this spot")
                         .contextMenu {

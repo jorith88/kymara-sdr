@@ -42,8 +42,8 @@ struct BookmarksView: View {
                             BookmarkRow(bookmark: b, active: abs(b.frequency - radio.vfoFrequency) < 1)
                                 .tag(b.id)
                                 .contentShape(Rectangle())
-                                .onTapGesture(count: 2) { radio.recall(b) }
-                                .onTapGesture { selection = b.id; radio.recall(b) }
+                                // Simultaneous, so the list still selects the row and takes focus.
+                                .simultaneousGesture(TapGesture().onEnded { radio.recall(b) })
                                 .accessibilityAction { radio.recall(b) }
                                 .accessibilityHint("Tunes to this favourite")
                                 .contextMenu {
