@@ -61,8 +61,8 @@ sent and the rest is filtered locally. `DXClusterStore` (`@MainActor @Observable
 environment) polls with exponential backoff on errors, merges duplicate reports (same call within the same kHz),
 drops spots older than `maxAge`, pauses while the main window is not visible (`WindowVisibilityReader`), and saves its
 settings under its own UserDefaults key (`DXClusterSettings`, tolerant decoding). `DXSpot.demodMode` maps the
-reported mode (digital → USB; without one: comment words, the FT8/FT4 dial frequencies, else the sideband
-convention). `DXClusterStore.isShown` (mode and continent filters) applies to both the spot list (`DXSpotsView`, a tab
+reported mode (digital → USB; a reported LSB/USB looks band-plan derived, so like a missing mode it gives way to
+digital words in the comment and the FT8/FT4 dial frequencies; else the sideband convention). `DXClusterStore.isShown` (mode and continent filters) applies to both the spot list (`DXSpotsView`, a tab
 of `SidePanel`) and the spectrum labels (`DXSpotOverlayLayer`, rows from `DXLabelLayout.place`). Tuning from a
 favourite or spot goes through `RadioController.jump(to:)`, which only centres a zoomed view when the target is out of
 view or the LO moves.

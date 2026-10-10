@@ -92,7 +92,11 @@ final class DXClusterTests: XCTestCase {
         XCTAssertEqual(mode(nil, 7_074_800), .usb, "FT8 segment")
         XCTAssertEqual(mode(nil, 7_074_800, "ssb net"), .lsb, "unless the comment says otherwise")
         XCTAssertEqual(mode(nil, 7_160_000, "js8 call"), .usb)
-        XCTAssertEqual(mode("LSB", 7_074_500), .lsb, "a reported mode wins")
+        XCTAssertEqual(mode("LSB", 7_074_500), .usb, "a reported sideband gives way to the FT8 frequency")
+        XCTAssertEqual(mode("LSB", 7_054_000, "RTTY"), .usb, "and to a digital mode in the comment")
+        XCTAssertEqual(mode("LSB", 7_074_500, "ssb qso"), .lsb, "unless the comment says SSB")
+        XCTAssertEqual(mode("LSB", 7_150_000), .lsb, "a reported sideband elsewhere stands")
+        XCTAssertEqual(mode("CW", 7_074_500, "rtty"), .cw, "a reported CW always stands")
     }
 
     func testMergeKeepsNewestAndCollectsSpotters() {

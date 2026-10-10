@@ -43,17 +43,19 @@ struct DXSpot: Identifiable, Hashable, Sendable {
         18_100, 18_104, 21_074, 21_140, 24_915, 24_919, 28_074, 28_180, 50_313, 50_318,
     ]
 
-    /// A digital-mode spot: reported as one, named in the comment, or (with no mode reported)
-    /// within the audio passband above a standard FT8/FT4 dial frequency.
+    /// A digital-mode spot: reported as one, named in the comment ("RTTY", "FT8", …), or within the
+    /// audio passband above a standard FT8/FT4 dial frequency. A reported LSB or USB doesn't rule
+    /// that out: DXHeat appears to derive it from the band plan, so it says LSB for RTTY on 40 m.
+    /// A reported CW does, and so does "CW" or "SSB" in the comment.
     static func isDigital(reported: String?, frequency: Double, comment: String) -> Bool {
-        guard let reported = reported?.uppercased(), !reported.isEmpty else {
-            let words = commentWords(comment)
-            if words.contains("CW") || words.contains("SSB") { return false }
-            if words.contains(where: { digitalModes.contains(String($0)) }) { return true }
-            let kHz = frequency / 1_000
-            return digitalDials.contains { (0...3.5).contains(kHz - $0) }
-        }
-        return digitalModes.contains(reported)
+        let reported = reported?.uppercased() ?? ""
+        if digitalModes.contains(reported) { return true }
+        guard ["", "LSB", "USB"].contains(reported) else { return false }
+        let words = commentWords(comment)
+        if words.contains("CW") || words.contains("SSB") { return false }
+        if words.contains(where: { digitalModes.contains(String($0)) }) { return true }
+        let kHz = frequency / 1_000
+        return digitalDials.contains { (0...3.5).contains(kHz - $0) }
     }
 
     private static func commentWords(_ comment: String) -> Set<Substring> {

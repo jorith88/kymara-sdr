@@ -63,8 +63,8 @@ auto range. S-meter (S1–S9+60, estimated dBm and dBFS, peak and squelch marker
 
 **DX cluster:** live amateur radio spots from [DXHeat.com](https://dxheat.com), in a tab beside the favourites and
 as callsign labels on the spectrum (coloured by CW, phone or digital, fading with age). Click a spot or label to
-tune to it in its mode: CW and SSB as reported, digital modes in USB, and otherwise by the usual sideband
-convention, with spots on the standard FT8/FT4 frequencies counted as digital. Filter by range, mode, DX continent
+tune to it in its mode: CW as reported, digital modes in USB (also when the comment names one, such as RTTY or
+FT8, or the spot is on a standard FT8/FT4 frequency), and SSB as reported or by the usual sideband convention. Filter by range, mode, DX continent
 or text. Off by default; when on, Kymara checks for new spots every minute (adjustable in Settings), only while its
 window is visible.
 
