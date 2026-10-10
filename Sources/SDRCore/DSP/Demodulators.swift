@@ -9,8 +9,15 @@ public enum DemodMode: String, CaseIterable, Codable, Identifiable, Sendable {
     case lsb = "LSB"
     case cw = "CW"
     case dsb = "DSB"
+    /// FreeDV RADE V1 digital voice (received in USB).
+    case rade = "RADE"
 
     public var id: String { rawValue }
+
+    /// The modes this build can receive (RADE needs the sources from scripts/fetch-rade.sh).
+    public static var available: [DemodMode] {
+        allCases.filter { $0 != .rade || RADEDecoder.isAvailable }
+    }
 
     public var defaultBandwidth: Double {
         switch self {
@@ -20,6 +27,7 @@ public enum DemodMode: String, CaseIterable, Codable, Identifiable, Sendable {
         case .usb, .lsb: return 2_700
         case .cw: return 500
         case .dsb: return 6_000
+        case .rade: return 2_700
         }
     }
 
@@ -31,6 +39,7 @@ public enum DemodMode: String, CaseIterable, Codable, Identifiable, Sendable {
         case .usb, .lsb: return [1_800, 2_100, 2_400, 2_700, 3_000, 4_000]
         case .cw: return [100, 200, 300, 500, 800, 1_200]
         case .dsb: return [3_000, 4_000, 6_000, 8_000, 10_000]
+        case .rade: return [2_400, 2_700, 3_000]
         }
     }
 
@@ -39,6 +48,8 @@ public enum DemodMode: String, CaseIterable, Codable, Identifiable, Sendable {
         case .wfm: return 30_000...220_000
         case .cw: return 50...3_000
         case .usb, .lsb: return 500...6_000
+        // The RADE V1 signal occupies about 0.8–2.3 kHz from the dial frequency.
+        case .rade: return 2_400...3_000
         default: return 1_000...40_000
         }
     }
@@ -49,6 +60,7 @@ public enum DemodMode: String, CaseIterable, Codable, Identifiable, Sendable {
         case .nfm: return 12_500
         case .wfm: return 100_000
         case .usb, .lsb, .dsb: return 100
+        case .rade: return 1_000
         case .cw: return 10
         }
     }
@@ -57,13 +69,14 @@ public enum DemodMode: String, CaseIterable, Codable, Identifiable, Sendable {
     public var supportsAutoNotch: Bool {
         switch self {
         case .am, .usb, .lsb, .dsb: return true
-        case .nfm, .wfm, .cw: return false
+        case .nfm, .wfm, .cw, .rade: return false
         }
     }
 
-    /// Filter passband edges relative to the VFO in Hz.
-    public func filterEdges(bandwidth bw: Double) -> (lo: Double, hi: Double) {
+    /// Filter passband edges relative to the VFO in Hz. `lsb` selects the sideband for RADE.
+    public func filterEdges(bandwidth bw: Double, lsb: Bool = false) -> (lo: Double, hi: Double) {
         switch self {
+        case .rade: return lsb ? (-(100 + bw), -100) : (100, 100 + bw)
         case .usb: return (100, 100 + bw)
         case .lsb: return (-(100 + bw), -100)
         default: return (-bw / 2, bw / 2)

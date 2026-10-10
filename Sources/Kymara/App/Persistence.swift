@@ -54,6 +54,7 @@ struct RadioSettings: Codable {
     var stereo = true
     var rds = true
     var cwPitch: Double = 700
+    var radeSideband: RADESideband = .auto
     var dcCorrection = true
     var swapIQ = false
     var fftSize = 16384
@@ -117,6 +118,7 @@ extension RadioSettings {
         read(.stereo, &stereo)
         read(.rds, &rds)
         read(.cwPitch, &cwPitch)
+        read(.radeSideband, &radeSideband)
         read(.dcCorrection, &dcCorrection)
         read(.swapIQ, &swapIQ)
         read(.fftSize, &fftSize)

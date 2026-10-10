@@ -18,6 +18,10 @@ open "build/Kymara.app"
 
 During development: `swift run -c release Kymara`. Tests: `swift test -c release`.
 
+RADE (FreeDV) support is built from sources that are not in this repository (~45 MB of neural network
+weights). `build-app.sh` fetches them; for `swift run`/`swift test`, run `./scripts/fetch-rade.sh` once first.
+Without them Kymara builds without the RADE mode.
+
 ### Updates
 
 The app updates itself with [Sparkle](https://sparkle-project.org) (**Kymara → Check for Updates…**, or
@@ -41,8 +45,12 @@ layouts still matches the installed headers.
 demo generator with FM broadcast, AM, NFM, SSB and CW signals, so everything also works without hardware.
 
 **Receiver:** AM, NFM, WFM (stereo with a 19 kHz pilot PLL, 50/75 µs de-emphasis), USB, LSB, CW (adjustable
-pitch) and DSB. Adjustable bandwidth (presets or by dragging the filter edges), tuning step, AGC
+pitch), DSB and RADE (FreeDV digital voice). Adjustable bandwidth (presets or by dragging the filter edges), tuning step, AGC
 (off/fast/medium/slow) or manual AF gain, squelch with hysteresis (level, or auto on carrier-to-noise ratio in FM modes), volume/mute.
+
+**FreeDV RADE:** receives FreeDV's RADE V1 digital voice: a neural decoder and the FARGAN vocoder turn the OFDM
+signal back into speech. Shows sync, SNR and frequency offset, and the callsign sent at the end of each over. The
+sideband follows the FreeDV convention (LSB below 10 MHz except 60 m, USB above) or can be set by hand.
 
 **RDS (WFM):** programme service name, PI code, programme type, TP/TA, RadioText and clock time, with
 error correction of short bursts. Shown as a panel over the spectrum; new favourites are named after the station.
@@ -94,6 +102,8 @@ Shortcuts: ⌘R start/stop, ⌘1–7 modes, ⌘D add favourite, ⌘=/⌘−/⌘0
 - `Sources/SDRCore` — sources (librtlsdr and the SDRplay API via `dlopen`, rtl_tcp, file, demo), DSP chain
   (NCO → decimation to ~240 kHz → channel filter (overlap-save FFT) → demodulation → ~48 kHz audio, plus the RDS decoder on the FM multiplex),
   spectrum analysis, audio output (AVAudioEngine) and recording.
+- `Sources/CRADE` — FreeDV RADE receiver: a small C wrapper around rade_c, Opus's FARGAN and freedv-backend's
+  callsign decoder (their sources are fetched by `scripts/fetch-rade.sh`).
 - `Sources/CSDRplay` — C declarations of the SDRplay API types (no code; the library is loaded at runtime).
 - `Sources/Kymara` — SwiftUI app, `RadioController` (state and settings), Metal renderers, persistence, and the
   DX cluster client (`DXCluster/`).
@@ -105,12 +115,16 @@ The DSP processes 1 s of 2.4 MS/s in ~15–25 ms on Apple silicon.
 Kymara is free software, licensed under the [GNU General Public License v3.0](LICENSE.md).
 Copyright © 2026 Jorith van den Heuvel.
 
-The app bundle includes these libraries, each under its own license:
+The app bundle includes these libraries (the RADE ones are compiled in), each under its own license. The license
+texts are in `Kymara.app/Contents/Resources/Licenses`.
 
 | Library | Version | License | Source |
 |---|---|---|---|
 | [librtlsdr](https://github.com/steve-m/librtlsdr) | 2.0.3 | GPL-2.0-or-later | [v2.0.3](https://github.com/steve-m/librtlsdr/archive/refs/tags/v2.0.3.tar.gz) |
 | [libusb](https://libusb.info) | 1.0.30 | LGPL-2.1-or-later | [v1.0.30](https://github.com/libusb/libusb/releases/download/v1.0.30/libusb-1.0.30.tar.bz2) |
 | [Sparkle](https://sparkle-project.org) | 2.10.0 | MIT | [2.10.0](https://github.com/sparkle-project/Sparkle/tree/2.10.0) |
+| [rade_c](https://github.com/freedv/rade_c) (RADE V1 receiver) | c8a3dc1 | BSD-2-Clause | [c8a3dc1](https://github.com/freedv/rade_c/tree/c8a3dc156045cae2cd251e1a4be0c304c9ddf2f9) + [patches](scripts/patches) |
+| [Opus](https://opus-codec.org) (FARGAN vocoder) | 940d4e5 | BSD-3-Clause | [940d4e5](https://github.com/xiph/opus/tree/940d4e5af64351ca8ba8390df3f555484c567fbb) |
+| [freedv-backend](https://github.com/tmiw/freedv-backend) (RADE callsign decoder) | 8018330 | BSD-2-Clause | [8018330](https://github.com/tmiw/freedv-backend/tree/80183302230716029def1d0ae8655fb76f96d91e) |
 
 The SDRplay API is not bundled; it is installed separately under SDRplay's own license.

@@ -1,0 +1,25 @@
+rade_c's EOO demodulator is off by one symbol against the frame the transmitter sends (P E D D D E) and the
+Python reference (radae/dsp.py receiver_one, where Ns is redefined as Ns + 1): it uses the third data symbol
+as the closing EOO pilot, and extracts only two of the three data symbols, so the last 60 of the 180 EOO
+floats it returns are uninitialised stack memory. That garbage is exactly where FreeDV's text decoder
+estimates the noise, so callsigns decoded only some of the time.
+--- a/src/rade_ofdm.c
++++ b/src/rade_ofdm.c
+@@ -544,7 +544,7 @@
+         RADE_COMP sum = rade_czero();
+         sum = rade_cadd(sum, rade_cdiv(rx_sym[0][c], ofdm->P[c]));
+         sum = rade_cadd(sum, rade_cdiv(rx_sym[1][c], ofdm->Pend[c]));
+-        sum = rade_cadd(sum, rade_cdiv(rx_sym[Ns][c], ofdm->Pend[c]));
++        sum = rade_cadd(sum, rade_cdiv(rx_sym[Ns + 1][c], ofdm->Pend[c]));
+         float phase_offset = rade_cangle(sum);
+ 
+         /* Correct all symbols */
+@@ -555,7 +555,7 @@
+ 
+     /* Extract data symbols (symbols 2 to Ns, i.e., Ns-1 symbols) */
+     int out_idx = 0;
+-    for (int s = 2; s < Ns; s++) {
++    for (int s = 2; s <= Ns; s++) {
+         for (int c = 0; c < Nc; c++) {
+             z_hat[out_idx++] = rx_sym[s][c].real;
+             z_hat[out_idx++] = rx_sym[s][c].imag;

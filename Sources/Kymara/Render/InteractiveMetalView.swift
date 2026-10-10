@@ -133,6 +133,8 @@ final class InteractiveMTKView: MTKView {
             switch r.mode {
             case .usb: r.setBandwidth((isLow ? r.filterEnd - f : d - 100))
             case .lsb: r.setBandwidth((isLow ? -d - 100 : f - r.filterStart))
+            case .rade where r.radeLSB: r.setBandwidth((isLow ? -d - 100 : f - r.filterStart))
+            case .rade: r.setBandwidth((isLow ? r.filterEnd - f : d - 100))
             default: r.setBandwidth(2 * abs(d))
             }
         case .none:
