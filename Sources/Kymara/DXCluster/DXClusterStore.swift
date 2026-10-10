@@ -91,12 +91,19 @@ final class DXClusterStore {
 
     var providerName: String { provider.name }
 
-    /// Spots between two frequencies (Hz), newest first.
-    func spots(in range: ClosedRange<Double>) -> [DXSpot] {
-        spots.filter { range.contains($0.frequency) }
+    /// Whether a spot passes the mode and continent filters, which apply everywhere spots are shown.
+    /// (The provider already filters on continent; checking again covers spots fetched before a change.)
+    func isShown(_ spot: DXSpot) -> Bool {
+        (categories.isEmpty || categories.contains(spot.category))
+            && (continents.isEmpty || continents.contains(spot.dxContinent))
     }
 
-    /// Spots passing the list filters. `tuner` and `view` are the frequency ranges the scopes refer to.
+    /// Shown spots between two frequencies (Hz), newest first.
+    func spots(in range: ClosedRange<Double>) -> [DXSpot] {
+        spots.filter { range.contains($0.frequency) && isShown($0) }
+    }
+
+    /// Shown spots that also pass the list's own filters (range scope and search). `tuner` and `view` are the frequency ranges the scopes refer to.
     func filteredSpots(search: String, tuner: ClosedRange<Double>, view: ClosedRange<Double>) -> [DXSpot] {
         let range: ClosedRange<Double>? = switch scope {
         case .all: nil
@@ -106,7 +113,7 @@ final class DXClusterStore {
         let needle = search.trimmingCharacters(in: .whitespaces).uppercased()
         return spots.filter { spot in
             if let range, !range.contains(spot.frequency) { return false }
-            if !categories.isEmpty, !categories.contains(spot.category) { return false }
+            if !isShown(spot) { return false }
             guard !needle.isEmpty else { return true }
             return spot.dxCall.uppercased().contains(needle) || spot.comment.uppercased().contains(needle)
                 || spot.spotters.contains { $0.uppercased().contains(needle) }

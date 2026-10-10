@@ -242,6 +242,26 @@ final class DXClusterTests: XCTestCase {
         store.scope = .all
         store.categories = [.cw, .digital]
         XCTAssertEqual(calls(), ["JA1XX", "OH0Z"])
+        XCTAssertEqual(store.spots(in: tuner).map(\.dxCall), ["JA1XX", "OH0Z"])
+
+        // The spectrum labels use the same mode filter.
+        store.categories = [.phone]
+        XCTAssertEqual(store.spots(in: 7_000_000...15_000_000).map(\.dxCall), ["VK2YY"])
+    }
+
+    @MainActor
+    func testContinentFilterAppliesLocallyToo() async {
+        let provider = FakeProvider()
+        let store = DXClusterStore(provider: provider, now: { self.now })
+        var eu = spot("DL1AA", 14_025_000, utc(5, 58)); eu.dxContinent = "EU"
+        var oc = spot("VK2YY", 14_200_000, utc(5, 57)); oc.dxContinent = "OC"
+        // A provider that ignores the filter still only gets the selected continents shown.
+        provider.result = .success([eu, oc])
+        store.continents = ["OC"]
+        await store.refresh()
+        XCTAssertEqual(provider.lastContinents, ["OC"])
+        XCTAssertEqual(store.spots(in: 14_000_000...14_350_000).map(\.dxCall), ["VK2YY"])
+        XCTAssertEqual(store.filteredSpots(search: "", tuner: 0...0, view: 0...0).map(\.dxCall), ["VK2YY"])
     }
 
     // MARK: Persistence and pausing
