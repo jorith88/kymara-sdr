@@ -51,7 +51,7 @@ stops if the RADE decoder is missing.
 
 Then run `./scripts/check-licenses.sh`. It checks that the bundled-libraries table in `README.md` lists the versions
 of librtlsdr, libusb and Sparkle that the app ships (the GPL requires pointing to the exact librtlsdr source) and the
-RADE commits, and that the app carries the Sparkle and RADE license texts. If it
+RADE commits, and that the app carries the license texts of all bundled libraries. If it
 reports a mismatch, replace the rows it names in `README.md` with the rows it prints, run it again until it passes,
 and include `README.md` in the release commit (step 7).
 

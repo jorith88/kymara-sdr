@@ -24,7 +24,7 @@ rtl_sdr -f 99000000 -s 2400000 -g 40 -n 19200000 out.cu8   # record raw IQ from 
 ```
 
 `scripts/check-sdrplay-shim.sh` checks `Sources/CSDRplay/include/sdrplay_shim.h` against the installed SDRplay API headers (run after an API upgrade). `scripts/check-licenses.sh` checks that the README's bundled-libraries table
-matches the librtlsdr, libusb, Sparkle and RADE versions in `build/Kymara.app` and that the app carries the Sparkle and RADE license texts (run by `/release`). `scripts/make-icon.swift` regenerates `Resources/AppIcon.icns`. There is no linter. Releases: `/release <version>` (`.claude/skills/release/SKILL.md`) tests, bumps the version, builds the DMG, tags and publishes a GitHub release.
+matches the librtlsdr, libusb, Sparkle and RADE versions in `build/Kymara.app` and that the app carries the license texts of all bundled libraries (run by `/release`). `scripts/make-icon.swift` regenerates `Resources/AppIcon.icns`. There is no linter. Releases: `/release <version>` (`.claude/skills/release/SKILL.md`) tests, bumps the version, builds the DMG, tags and publishes a GitHub release.
 
 ## Architecture
 

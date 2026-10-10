@@ -21,7 +21,7 @@ if ! nm "$APP/Contents/MacOS/Kymara" | grep " T _rade_rx_process$" >/dev/null; t
     exit 1
 fi
 # The licenses of Sparkle (MIT, plus the code it includes) and of the code compiled in for RADE (BSD) ask for their
-# notices to ship with the binary.
+# notices to ship with the binary (librtlsdr's and libusb's are added where they are bundled, below).
 LIC="$APP/Contents/Resources/Licenses"
 mkdir -p "$LIC"
 cp .build/checkouts/Sparkle/LICENSE "$LIC/Sparkle.txt"
@@ -39,14 +39,22 @@ RTL=""
 for p in /opt/homebrew/lib/librtlsdr.0.dylib /usr/local/lib/librtlsdr.0.dylib; do
     [ -f "$p" ] && RTL=$(realpath "$p") && break
 done
+# The Homebrew keg (…/Cellar/<name>/<version>) holds each library's AUTHORS and COPYING; they ship with the app.
+bundle_license() {  # dylib name
+    local keg
+    keg=$(dirname "$(dirname "$1")")
+    cat "$keg/AUTHORS" <(echo) "$keg/COPYING" > "$LIC/$2.txt"
+}
 if [ -n "$RTL" ]; then
     FW="$APP/Contents/Frameworks"
+    bundle_license "$RTL" librtlsdr
     cp "$RTL" "$FW/librtlsdr.0.dylib"
     chmod u+w "$FW/librtlsdr.0.dylib"
     install_name_tool -id "@rpath/librtlsdr.0.dylib" "$FW/librtlsdr.0.dylib"
     USB_REF=$(otool -L "$RTL" | awk '/libusb/ {print $1}' | head -1)
     if [ -n "$USB_REF" ]; then
         cp "$(realpath "$USB_REF")" "$FW/libusb-1.0.0.dylib"
+        bundle_license "$(realpath "$USB_REF")" libusb
         chmod u+w "$FW/libusb-1.0.0.dylib"
         install_name_tool -id "@rpath/libusb-1.0.0.dylib" "$FW/libusb-1.0.0.dylib"
         install_name_tool -change "$USB_REF" "@loader_path/libusb-1.0.0.dylib" "$FW/librtlsdr.0.dylib"

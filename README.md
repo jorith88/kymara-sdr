@@ -108,7 +108,7 @@ Kymara is free software, licensed under the [GNU General Public License v3.0](LI
 Copyright © 2026 Jorith van den Heuvel.
 
 The app bundle includes these libraries (the RADE ones are compiled in), each under its own license. The license
-texts of Sparkle and the RADE libraries are in `Kymara.app/Contents/Resources/Licenses`.
+texts are in `Kymara.app/Contents/Resources/Licenses`.
 
 | Library | Version | License | Source |
 |---|---|---|---|

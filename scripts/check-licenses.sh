@@ -1,6 +1,6 @@
 #!/bin/bash
 # Checks that the bundled-libraries table in README.md lists the versions that build/Kymara.app ships, and that
-# the app carries the license notices of Sparkle and of the code compiled in for RADE.
+# the app carries the license texts of every bundled library.
 # Run after scripts/build-app.sh. On a mismatch it prints the correct table rows and exits 1.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -28,7 +28,7 @@ pinned() { tr ' ' '\n' < "$VERSION_FILE" | sed -n "s/^$1=//p"; }
 RADE_C=$(pinned RADE_C_COMMIT)
 OPUS=$(pinned OPUS_COMMIT)
 FREEDV=$(pinned FREEDV_BACKEND_COMMIT)
-for f in Sparkle.txt rade_c.txt Opus.txt freedv-backend.txt; do
+for f in librtlsdr.txt libusb.txt Sparkle.txt rade_c.txt Opus.txt freedv-backend.txt; do
     [ -f "$APP/Contents/Resources/Licenses/$f" ] || { echo "error: $APP lacks Contents/Resources/Licenses/$f" >&2; exit 1; }
 done
 
