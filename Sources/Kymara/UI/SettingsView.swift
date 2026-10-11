@@ -5,12 +5,14 @@ struct SettingsView: View {
     @Environment(RadioController.self) private var radio
     @Environment(Updater.self) private var updater
     @Environment(DXClusterStore.self) private var cluster
+    @Environment(FreeDVStationStore.self) private var freedvStations
 
     var body: some View {
         @Bindable var radio = radio
         @Bindable var updater = updater
         @Bindable var cluster = cluster
         @Bindable var reporter = radio.reporter
+        @Bindable var freedvStations = freedvStations
         Form {
             Section {
                 Picker("Appearance", selection: $radio.theme) {
@@ -58,12 +60,19 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             Section {
+                Toggle("Show FreeDV stations", isOn: $freedvStations.isEnabled)
+            } header: {
+                Text("FreeDV Reporter")
+            } footer: {
+                Text("Lists the stations on qso.freedv.org in the side panel and labels the ones transmitting on the spectrum. Kymara only follows the list while its window is visible.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section {
                 Toggle("Report RADE reception", isOn: $reporter.isEnabled)
                 TextField("Callsign", text: $reporter.callsign, prompt: Text("PA0ABC"))
                 TextField("Locator", text: $reporter.locator, prompt: Text("JO22ab"))
                 TextField("Message", text: $reporter.message, prompt: Text("Optional"))
-            } header: {
-                Text("FreeDV Reporter")
             } footer: {
                 Text(reporterStatus)
                     .font(.caption)

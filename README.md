@@ -53,6 +53,9 @@ signal back into speech. Shows sync, SNR and frequency offset, and the callsign 
 sideband follows the FreeDV convention (LSB below 10 MHz except 60 m, USB above) or can be set by hand.
 Optionally reports to [FreeDV Reporter](https://qso.freedv.org) as a receive-only station (Settings → FreeDV
 Reporter): your callsign, locator, frequency and an optional message while the radio runs in RADE mode, and the callsigns you decode.
+The stations on FreeDV Reporter can also be shown in a FreeDV tab of the side panel (current band or all bands, transmitting
+stations first), with labels on the spectrum for stations that are transmitting or did so in the last 15 minutes; a click tunes
+to them in RADE.
 
 **RDS (WFM):** programme service name, PI code, programme type, TP/TA, RadioText and clock time, with
 error correction of short bursts. Shown as a panel over the spectrum; new favourites are named after the station.
@@ -79,7 +82,7 @@ or text. Off by default; when on, Kymara checks for new spots every minute (adju
 window is visible.
 
 **Settings** are saved automatically to `~/Library/Preferences/nl.pa3jh.kymara.plist` and survive updates.
-Each field is read on its own (missing or unknown → default value), favourites, DX cluster and FreeDV Reporter settings are stored under their own keys,
+Each field is read on its own (missing or unknown → default value), favourites, DX cluster, FreeDV Reporter and FreeDV station list settings are stored under their own keys,
 and unreadable data is backed up instead of overwritten.
 
 ## Controls

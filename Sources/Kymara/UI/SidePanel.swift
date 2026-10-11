@@ -3,10 +3,11 @@ import SwiftUI
 enum SidePanelTab: String, CaseIterable, Identifiable, Codable {
     case favourites = "Favourites"
     case dxSpots = "DX Spots"
+    case freedv = "FreeDV"
     var id: String { rawValue }
 }
 
-/// The right-hand panel: favourites and DX cluster spots, one at a time.
+/// The right-hand panel: favourites, DX cluster spots and FreeDV stations, one at a time.
 struct SidePanel: View {
     @Environment(RadioController.self) private var radio
 
@@ -27,6 +28,7 @@ struct SidePanel: View {
                 switch radio.sidePanelTab {
                 case .favourites: BookmarksView()
                 case .dxSpots: DXSpotsView()
+                case .freedv: FreeDVStationsView()
                 }
             }
             // Keeps the tab picker at the top when the content (an empty state) is short.

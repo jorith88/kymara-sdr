@@ -721,6 +721,24 @@ final class RadioController {
         bookmarks.append(Bookmark(name: spot.dxCall, frequency: spot.frequency, mode: mode, bandwidth: bw, group: "DX"))
     }
 
+    /// The mode to receive a FreeDV station with: RADE, or the sideband when this build lacks the decoder.
+    private static func demodMode(for station: FreeDVStation) -> DemodMode {
+        DemodMode.available.contains(.rade) ? .rade : DXSpot.sidebandConvention(station.frequency)
+    }
+
+    /// Tunes to a FreeDV Reporter station's dial frequency.
+    func tune(to station: FreeDVStation) {
+        mode = Self.demodMode(for: station)
+        jump(to: station.frequency)
+    }
+
+    func addBookmark(_ station: FreeDVStation) {
+        let mode = Self.demodMode(for: station)
+        let bw = mode == self.mode ? bandwidth : min(bandwidths[mode.rawValue] ?? mode.defaultBandwidth, maxBandwidth)
+        bookmarks.append(Bookmark(name: station.callsign.uppercased(), frequency: station.frequency, mode: mode,
+                                  bandwidth: bw, group: "FreeDV"))
+    }
+
     /// Tunes to a picked frequency (a favourite or a spot). When zoomed in, the view stays put if the
     /// frequency is already in it, and is centred on it otherwise or when the LO had to move.
     private func jump(to frequency: Double) {
