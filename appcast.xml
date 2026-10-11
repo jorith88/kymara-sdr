@@ -6,6 +6,24 @@
         <link>https://github.com/jorith88/kymara-sdr</link>
         <!-- items -->
         <item>
+            <title>Kymara 1.0.0-beta.7</title>
+            <pubDate>Sun, 11 Oct 2026 06:23:40 +0000</pubDate>
+            <sparkle:version>7</sparkle:version>
+            <sparkle:shortVersionString>1.0.0-beta.7</sparkle:shortVersionString>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>New</h2>
+<ul>
+<li><strong>FreeDV Reporter stations.</strong> A new <strong>FreeDV</strong> tab in the side panel (⌥⌘F) lists the stations on <a href="https://qso.freedv.org" rel="nofollow">qso.freedv.org</a>, for the current band or all bands. Stations that are transmitting come first, and each shows its frequency, locator, message and the last callsign it decoded. Stations transmitting now or in the last 15 minutes are labelled on the spectrum next to the DX spots. A click tunes to a station in RADE. Turn it on in Settings → FreeDV Reporter or under View → FreeDV Stations.</li>
+<li><strong>Report your RADE reception.</strong> Optionally, while the radio runs in RADE mode, Kymara shows your station on qso.freedv.org as a receive-only station: your callsign, locator, frequency and an optional message, plus the callsigns you decode with their SNR. Set it up in Settings → FreeDV Reporter.</li>
+</ul>
+<h2>Improvements</h2>
+<ul>
+<li>The spectrum label toggle (⇧⌘L) is now called <strong>Spot Labels</strong> and covers both DX spots and FreeDV stations.</li>
+</ul>]]></description>
+            <enclosure url="https://github.com/jorith88/kymara-sdr/releases/download/v1.0.0-beta.7/Kymara-1.0.0-beta.7.dmg" sparkle:edSignature="J+DGCBbe5DoPpkBI8pbdF0ZTn7D5a3aKFHpWu0jP4Dvzos079SA9UHoeGgAFXedQXEqITr9JfGJvyvsARJI0Cw==" length="11998913" type="application/octet-stream"/>
+        </item>
+        <item>
             <title>Kymara 1.0.0-beta.6</title>
             <pubDate>Sat, 10 Oct 2026 13:09:01 +0000</pubDate>
             <sparkle:version>6</sparkle:version>
