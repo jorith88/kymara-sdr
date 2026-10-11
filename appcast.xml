@@ -6,6 +6,20 @@
         <link>https://github.com/jorith88/kymara-sdr</link>
         <!-- items -->
         <item>
+            <title>Kymara 1.0.0-beta.8</title>
+            <pubDate>Sun, 11 Oct 2026 06:36:31 +0000</pubDate>
+            <sparkle:version>8</sparkle:version>
+            <sparkle:shortVersionString>1.0.0-beta.8</sparkle:shortVersionString>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>Improvements</h2>
+<ul>
+<li><strong>Settings in tabs.</strong> The Settings window (⌘,) is split into General, DX Cluster, FreeDV and Updates tabs, and reopens on the tab you used last.</li>
+<li><strong>Local time.</strong> The DX spot list and the FreeDV station list show times in your local time and your system's time format, instead of UTC.</li>
+</ul>]]></description>
+            <enclosure url="https://github.com/jorith88/kymara-sdr/releases/download/v1.0.0-beta.8/Kymara-1.0.0-beta.8.dmg" sparkle:edSignature="p+wu3G7EX18fC+puDeX04hKp0CuCALipxJISLFbKFb/g60DgzZJUa1XYCWrdP3VV+Tk55CqZGLzVcBkdUsq/Aw==" length="10924436" type="application/octet-stream"/>
+        </item>
+        <item>
             <title>Kymara 1.0.0-beta.7</title>
             <pubDate>Sun, 11 Oct 2026 06:23:40 +0000</pubDate>
             <sparkle:version>7</sparkle:version>
