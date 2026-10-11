@@ -105,14 +105,6 @@ private struct FreeDVStationRow: View {
     let station: FreeDVStation
     let active: Bool
 
-    private static let timeFormat: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone(identifier: "UTC")
-        f.dateFormat = "HH:mm'Z'"
-        return f
-    }()
-
     private var stripe: Color {
         if station.transmitting { return Color(nsColor: .systemRed) }
         return station.isRecentTransmitter(now: Date()) ? FreeDVStationStore.labelColor : Color.gray.opacity(0.5)
@@ -149,11 +141,11 @@ private struct FreeDVStationRow: View {
                         .background(Color(nsColor: .systemRed), in: RoundedRectangle(cornerRadius: 2))
                         .accessibilityLabel("Transmitting")
                 } else if let t = station.lastTransmission {
-                    Text(Self.timeFormat.string(from: t))
+                    Text(t.formatted(date: .omitted, time: .shortened))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                         .help("Last transmission")
-                        .accessibilityLabel("Last transmitted \(Self.timeFormat.string(from: t))")
+                        .accessibilityLabel("Last transmitted \(t.formatted(date: .omitted, time: .shortened))")
                 } else if station.rxOnly {
                     Text("RX only")
                         .font(.caption)
