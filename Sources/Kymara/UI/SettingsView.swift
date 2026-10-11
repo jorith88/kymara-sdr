@@ -5,11 +5,14 @@ struct SettingsView: View {
     @Environment(RadioController.self) private var radio
     @Environment(Updater.self) private var updater
     @Environment(DXClusterStore.self) private var cluster
+    @Environment(FreeDVStationStore.self) private var freedvStations
 
     var body: some View {
         @Bindable var radio = radio
         @Bindable var updater = updater
         @Bindable var cluster = cluster
+        @Bindable var reporter = radio.reporter
+        @Bindable var freedvStations = freedvStations
         Form {
             Section {
                 Picker("Appearance", selection: $radio.theme) {
@@ -57,6 +60,25 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             Section {
+                Toggle("Show FreeDV stations", isOn: $freedvStations.isEnabled)
+            } header: {
+                Text("FreeDV Reporter")
+            } footer: {
+                Text("Lists the stations on qso.freedv.org in the side panel and labels the ones transmitting on the spectrum. Kymara only follows the list while its window is visible.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section {
+                Toggle("Report RADE reception", isOn: $reporter.isEnabled)
+                TextField("Callsign", text: $reporter.callsign, prompt: Text("PA0ABC"))
+                TextField("Locator", text: $reporter.locator, prompt: Text("JO22ab"))
+                TextField("Message", text: $reporter.message, prompt: Text("Optional"))
+            } footer: {
+                Text(reporterStatus)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section {
                 Toggle("Automatically check for updates", isOn: $updater.automaticallyChecksForUpdates)
                 Toggle("Include pre-releases", isOn: $updater.includePreReleases)
                 Button("Check for Updates…") { updater.checkForUpdates() }
@@ -75,5 +97,19 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 460)
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var reporterStatus: String {
+        let reporter = radio.reporter
+        let about = "While the radio runs in RADE mode, Kymara shows your station on qso.freedv.org as a receive-only "
+            + "station, with your callsign, locator, frequency and message and the callsigns you decode."
+        guard reporter.isEnabled else { return about }
+        guard reporter.isConfigured else { return "Enter your callsign and a 4- or 6-character locator to report." }
+        switch reporter.state {
+        case .idle: return about
+        case .connecting: return "Connecting to qso.freedv.org…"
+        case .connected: return "Reporting to qso.freedv.org."
+        case .failed(let message): return "Can't reach qso.freedv.org (\(message)). Kymara will try again."
+        }
     }
 }

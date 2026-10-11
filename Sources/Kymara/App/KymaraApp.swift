@@ -25,6 +25,7 @@ struct KymaraApp: App {
     @State private var radio = RadioController()
     @State private var updater = Updater()
     @State private var dxCluster = DXClusterStore(persistence: SettingsStore())
+    @State private var freedvStations = FreeDVStationStore(persistence: SettingsStore())
 
     /// On while the side panel shows `tab`; turning it on opens the panel on that tab.
     private func sidePanel(_ tab: SidePanelTab) -> Binding<Bool> {
@@ -41,6 +42,7 @@ struct KymaraApp: App {
             ContentView()
                 .environment(radio)
                 .environment(dxCluster)
+                .environment(freedvStations)
                 .frame(minWidth: 1180, minHeight: 680)
                 .onAppear {
                     let radio = radio
@@ -79,11 +81,14 @@ struct KymaraApp: App {
                     .keyboardShortcut("b", modifiers: [.command, .option])
                 Toggle("Show DX Spots", isOn: sidePanel(.dxSpots))
                     .keyboardShortcut("x", modifiers: [.command, .option])
-                Toggle("Show DX Spot Labels", isOn: $radio.showDXLabels)
+                Toggle("Show FreeDV Stations", isOn: sidePanel(.freedv))
+                    .keyboardShortcut("f", modifiers: [.command, .option])
+                Toggle("Show Spot Labels", isOn: $radio.showDXLabels)
                     .keyboardShortcut("l", modifiers: [.command, .shift])
-                    .disabled(!dxCluster.isEnabled)
+                    .disabled(!dxCluster.isEnabled && !freedvStations.isEnabled)
                 Divider()
                 Toggle("DX Cluster", isOn: $dxCluster.isEnabled)
+                Toggle("FreeDV Stations", isOn: $freedvStations.isEnabled)
                 Divider()
             }
             CommandMenu("Radio") {
@@ -124,6 +129,7 @@ struct KymaraApp: App {
                 .environment(radio)
                 .environment(updater)
                 .environment(dxCluster)
+                .environment(freedvStations)
         }
     }
 }
