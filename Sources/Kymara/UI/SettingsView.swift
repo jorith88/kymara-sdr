@@ -2,18 +2,45 @@ import SwiftUI
 
 /// The standard Settings window (⌘,) for app-wide preferences that are not changed while listening.
 struct SettingsView: View {
+    enum Tab: String {
+        case general, dxCluster, freedv, updates
+    }
+
+    /// Settings reopens on the pane last used, as macOS settings windows do.
+    @AppStorage("SettingsTab") private var tab: Tab = .general
     @Environment(RadioController.self) private var radio
     @Environment(Updater.self) private var updater
     @Environment(DXClusterStore.self) private var cluster
     @Environment(FreeDVStationStore.self) private var freedvStations
 
     var body: some View {
+        TabView(selection: $tab) {
+            general
+                .tabItem { Label("General", systemImage: "gearshape") }
+                .tag(Tab.general)
+            dxCluster
+                .tabItem { Label("DX Cluster", systemImage: "antenna.radiowaves.left.and.right") }
+                .tag(Tab.dxCluster)
+            freedv
+                .tabItem { Label("FreeDV", systemImage: "person.wave.2") }
+                .tag(Tab.freedv)
+            updates
+                .tabItem { Label("Updates", systemImage: "arrow.triangle.2.circlepath") }
+                .tag(Tab.updates)
+        }
+    }
+
+    /// Every tab is a grouped form of the same width that takes the height it needs.
+    private func page(@ViewBuilder _ content: () -> some View) -> some View {
+        Form { content() }
+            .formStyle(.grouped)
+            .frame(width: 460)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var general: some View {
         @Bindable var radio = radio
-        @Bindable var updater = updater
-        @Bindable var cluster = cluster
-        @Bindable var reporter = radio.reporter
-        @Bindable var freedvStations = freedvStations
-        Form {
+        return page {
             Section {
                 Picker("Appearance", selection: $radio.theme) {
                     ForEach(AppTheme.allCases) { Text($0.rawValue).tag($0) }
@@ -37,6 +64,12 @@ struct SettingsView: View {
                 }
                 Button("Show in Finder") { radio.showRecordingsInFinder() }
             }
+        }
+    }
+
+    private var dxCluster: some View {
+        @Bindable var cluster = cluster
+        return page {
             Section {
                 Toggle("Show DX cluster spots", isOn: $cluster.isEnabled)
                 Picker("Check for new spots", selection: $cluster.refreshInterval) {
@@ -52,17 +85,22 @@ struct SettingsView: View {
                     Text("1 hour").tag(3_600.0)
                 }
                 .disabled(!cluster.isEnabled)
-            } header: {
-                Text("DX Cluster")
             } footer: {
                 Text("Spots come from \(cluster.providerName).com, a community DX cluster. Kymara only checks for new spots while its window is visible.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    private var freedv: some View {
+        @Bindable var reporter = radio.reporter
+        @Bindable var freedvStations = freedvStations
+        return page {
             Section {
                 Toggle("Show FreeDV stations", isOn: $freedvStations.isEnabled)
             } header: {
-                Text("FreeDV Reporter")
+                Text("Stations")
             } footer: {
                 Text("Lists the stations on qso.freedv.org in the side panel and labels the ones transmitting on the spectrum. Kymara only follows the list while its window is visible.")
                     .font(.caption)
@@ -73,18 +111,24 @@ struct SettingsView: View {
                 TextField("Callsign", text: $reporter.callsign, prompt: Text("PA0ABC"))
                 TextField("Locator", text: $reporter.locator, prompt: Text("JO22ab"))
                 TextField("Message", text: $reporter.message, prompt: Text("Optional"))
+            } header: {
+                Text("Reporting")
             } footer: {
                 Text(reporterStatus)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    private var updates: some View {
+        @Bindable var updater = updater
+        return page {
             Section {
                 Toggle("Automatically check for updates", isOn: $updater.automaticallyChecksForUpdates)
                 Toggle("Include pre-releases", isOn: $updater.includePreReleases)
                 Button("Check for Updates…") { updater.checkForUpdates() }
                     .disabled(!updater.canCheckForUpdates)
-            } header: {
-                Text("Updates")
             } footer: {
                 Text(updater.isAvailable
                      ? "Pre-releases are beta versions that are still being tested."
@@ -94,9 +138,6 @@ struct SettingsView: View {
             }
             .disabled(!updater.isAvailable)
         }
-        .formStyle(.grouped)
-        .frame(width: 460)
-        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var reporterStatus: String {
