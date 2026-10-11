@@ -77,6 +77,13 @@ and `rx_only`, then after the server's `connection_successful` `freq_change`/`tx
 `RadioController.updateMeter` drives it: connected only while running in RADE mode on a real receiver (not a
 file or demo source, which would put false reports on the map); frequency and settings changes are sent once they
 have settled for 1 s.
+`FreeDVStationStore` (same folder, owned by `KymaraApp`, in the environment) shows the station list: its own
+Socket.IO connection with role `view` (so it adds no station to the map) while enabled and a window is visible, fed
+by `bulk_update` after connecting and live `new_connection`/`remove_connection`/`freq_change`/`tx_report`/
+`message_update`/`rx_report` events (timestamps are ISO 8601 with microseconds, `parseDate` cuts them to ms;
+anonymous viewers have an empty callsign and are not listed; one callsign connected twice on a frequency is listed
+once). `FreeDVStationsView` is the `SidePanel` tab (current `AmateurBand` or all), and `DXSpotOverlayLayer` places
+FreeDV labels (stations transmitting or within `transmitterWindow`) together with the DX labels so they don't overlap.
 
 **DX cluster** (`Sources/Kymara/DXCluster/`). `DXHeatProvider` (behind the `SpotProvider` protocol) reads
 `https://dxheat.com/source/spots/`, the undocumented JSON endpoint DXHeat's own page polls: frequency in kHz as a

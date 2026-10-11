@@ -154,6 +154,7 @@ private struct RDSOverlayLayer: View {
 struct ContentView: View {
     @Environment(RadioController.self) private var radio
     @Environment(DXClusterStore.self) private var cluster
+    @Environment(FreeDVStationStore.self) private var freedv
 
     var body: some View {
         @Bindable var radio = radio
@@ -192,8 +193,11 @@ struct ContentView: View {
             StatusBar()
         }
         .background(Theme.window)
-        // Polling for DX spots stops while nobody can see them.
-        .background(WindowVisibilityReader { cluster.isPaused = !$0 })
+        // Polling for DX spots and the FreeDV station feed stop while nobody can see them.
+        .background(WindowVisibilityReader { visible in
+            cluster.isPaused = !visible
+            freedv.isPaused = !visible
+        })
         // Identified items make the toolbar user-customizable (View > Customize Toolbar…).
         .toolbar(id: "main") {
             ToolbarItem(id: "zoomOut", placement: .primaryAction) {
@@ -223,16 +227,16 @@ struct ContentView: View {
             }
             ToolbarItem(id: "dxLabels", placement: .primaryAction) {
                 Toggle(isOn: $radio.showDXLabels) {
-                    Label("DX Labels", systemImage: "tag")
+                    Label("Spot Labels", systemImage: "tag")
                 }
-                .disabled(!cluster.isEnabled)
-                .help("Show or hide DX spot labels on the spectrum (⇧⌘L)")
+                .disabled(!cluster.isEnabled && !freedv.isEnabled)
+                .help("Show or hide DX spot and FreeDV station labels on the spectrum (⇧⌘L)")
             }
             ToolbarItem(id: "favourites", placement: .primaryAction) {
                 Toggle(isOn: $radio.showBookmarks) {
                     Label("Side Panel", systemImage: "sidebar.right")
                 }
-                .help("Show or hide favourites and DX spots (⌥⌘B, ⌥⌘X)")
+                .help("Show or hide favourites, DX spots and FreeDV stations (⌥⌘B, ⌥⌘X, ⌥⌘F)")
             }
         }
         .alert("Error", isPresented: Binding(get: { radio.errorMessage != nil }, set: { if !$0 { radio.errorMessage = nil } })) {

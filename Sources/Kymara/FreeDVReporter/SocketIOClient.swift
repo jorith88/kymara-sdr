@@ -13,6 +13,11 @@ protocol ReporterTransport: AnyObject {
 
 /// Engine.IO v4 / Socket.IO v5 packets, the subset a reporting client needs.
 enum SocketIOPacket: Equatable {
+    struct Event: Equatable {
+        var name: String
+        var data: [String: AnyHashable]
+    }
+
     /// Engine.IO open; the session is ready for the Socket.IO connect.
     case open
     case ping
@@ -21,6 +26,8 @@ enum SocketIOPacket: Equatable {
     /// Socket.IO connect refused, or the server disconnected us.
     case refused(String)
     case event(String, [String: AnyHashable])
+    /// FreeDV Reporter's `bulk_update`: a batch of events (the station list sent after connecting).
+    case bulk([Event])
     case other
 
     static func parse(_ text: String) -> SocketIOPacket {
@@ -35,6 +42,12 @@ enum SocketIOPacket: Equatable {
         if text.hasPrefix("42"),
            let array = try? JSONSerialization.jsonObject(with: Data(text.dropFirst(2).utf8)) as? [Any],
            let name = array.first as? String {
+            if name == "bulk_update", let items = array.dropFirst().first as? [Any] {
+                return .bulk(items.compactMap { item in
+                    guard let pair = item as? [Any], let name = pair.first as? String else { return nil }
+                    return Event(name: name, data: (pair.dropFirst().first as? [String: Any]).map(hashable) ?? [:])
+                })
+            }
             let data = (array.dropFirst().first as? [String: Any]).map(hashable) ?? [:]
             return .event(name, data)
         }
@@ -127,6 +140,7 @@ final class SocketIOClient: ReporterTransport {
         case .connected, .other: break
         case .refused(let message): fail(message)
         case .event(let name, let data): onEvent?(name, data)
+        case .bulk(let events): for e in events { onEvent?(e.name, e.data) }
         }
     }
 
