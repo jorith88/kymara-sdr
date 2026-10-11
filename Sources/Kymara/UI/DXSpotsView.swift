@@ -111,13 +111,6 @@ private struct DXSpotRow: View {
     let spot: DXSpot
     let active: Bool
 
-    private static let timeFormat: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone(identifier: "UTC")
-        f.dateFormat = "HH:mm'Z'"
-        return f
-    }()
 
     private var badge: String { spot.category == .digital ? "DIGI" : spot.demodMode.rawValue }
 
@@ -154,7 +147,7 @@ private struct DXSpotRow: View {
                     .font(.body.weight(.semibold))
                     .lineLimit(1)
                 Spacer(minLength: 4)
-                Text(Self.timeFormat.string(from: spot.time))
+                Text(spot.time.formatted(date: .omitted, time: .shortened))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
