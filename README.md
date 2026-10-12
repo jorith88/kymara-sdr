@@ -1,4 +1,4 @@
-# Kymara
+# Kymara SDR
 
 Native macOS receiver for RTL-SDR dongles and SDRplay RSP receivers (Apple silicon), inspired by SDR Console.
 Swift + SwiftUI, DSP with Accelerate/vDSP, spectrum and waterfall rendered on the GPU with Metal.
@@ -12,8 +12,8 @@ Swift + SwiftUI, DSP with Accelerate/vDSP, spectrum and waterfall rendered on th
 
 ```bash
 brew install librtlsdr          # only needed to build/bundle; the .app then ships its own librtlsdr + libusb
-./scripts/build-app.sh          # → build/Kymara.app
-open "build/Kymara.app"
+./scripts/build-app.sh          # → "build/Kymara SDR.app"
+open "build/Kymara SDR.app"
 ```
 
 During development: `swift run -c release Kymara`. Tests: `swift test -c release`.
@@ -24,7 +24,7 @@ Without them Kymara builds without the RADE mode.
 
 ### Updates
 
-The app updates itself with [Sparkle](https://sparkle-project.org) (**Kymara → Check for Updates…**, or
+The app updates itself with [Sparkle](https://sparkle-project.org) (**Kymara SDR → Check for Updates…**, or
 automatically). It reads `appcast.xml` from the `main` branch; pre-releases are only offered when **Include
 pre-releases** is on in Settings. Updates installed this way are not quarantined, so macOS only asks for approval
 on the first install.
@@ -121,7 +121,7 @@ Kymara is free software, licensed under the [GNU General Public License v3.0](LI
 Copyright © 2026 Jorith van den Heuvel.
 
 The app bundle includes these libraries (the RADE ones are compiled in), each under its own license. The license
-texts are in `Kymara.app/Contents/Resources/Licenses`.
+texts are in `Kymara SDR.app/Contents/Resources/Licenses`.
 
 | Library | Version | License | Source |
 |---|---|---|---|

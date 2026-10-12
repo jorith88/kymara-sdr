@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDisplayName</key>
-	<string>Kymara</string>
+	<string>Kymara SDR</string>
 	<key>CFBundleExecutable</key>
 	<string>Kymara</string>
 	<key>CFBundleIconFile</key>
@@ -11,7 +11,7 @@
 	<key>CFBundleIdentifier</key>
 	<string>nl.pa3jh.kymara</string>
 	<key>CFBundleName</key>
-	<string>Kymara</string>
+	<string>Kymara SDR</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

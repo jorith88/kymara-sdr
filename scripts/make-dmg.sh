@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds Kymara.app and packages it as build/Kymara-<version>.dmg (drag-to-Applications layout).
+# Builds Kymara SDR.app and packages it as build/Kymara-<version>.dmg (drag-to-Applications layout).
 # Usage: scripts/make-dmg.sh [version]   (default: CFBundleShortVersionString from Info.plist)
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -9,10 +9,10 @@ VERSION="${1:-$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' Re
 
 STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
-cp -R build/Kymara.app "$STAGE/"
+cp -R "build/Kymara SDR.app" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 
 DMG="build/Kymara-$VERSION.dmg"
 rm -f "$DMG"
-hdiutil create -volname "Kymara $VERSION" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG"
+hdiutil create -volname "Kymara SDR $VERSION" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG"
 echo "Built: $DMG"

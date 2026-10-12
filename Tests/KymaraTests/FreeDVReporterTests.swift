@@ -79,7 +79,7 @@ final class FreeDVReporterTests: XCTestCase {
         XCTAssertEqual(auth["role"] as? String, "report")
         XCTAssertEqual(auth["callsign"] as? String, "PA0ABC")
         XCTAssertEqual(auth["grid_square"] as? String, "JO22ab")
-        XCTAssertEqual(auth["version"] as? String, "Kymara 1.2.3")
+        XCTAssertEqual(auth["version"] as? String, "Kymara SDR 1.2.3")
         XCTAssertEqual(auth["rx_only"] as? Bool, true)
         XCTAssertEqual(auth["protocol_version"] as? Int, 2)
 

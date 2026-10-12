@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Kymara is a native macOS (Apple silicon, macOS 14+) SDR receiver for RTL-SDR dongles and SDRplay RSPs, modelled on SDR Console.
+Kymara SDR is a native macOS (Apple silicon, macOS 14+) SDR receiver for RTL-SDR dongles and SDRplay RSPs, modelled on SDR Console.
 Swift Package, Swift 5 language mode (`swiftLanguageModes: [.v5]`), no Xcode project.
 
 **Language:** the app (all UI text, messages, menus) and all documentation (README, CLAUDE.md, code comments, commit
@@ -19,14 +19,14 @@ KYMARA_HARDWARE_TESTS=1 swift test -c release --filter SDRplayTests   # include 
 KYMARA_NETWORK_TESTS=1 swift test -c release --filter DXClusterTests  # include the test that fetches from dxheat.com
 KYMARA_NETWORK_TESTS=1 swift test -c release --filter FreeDVReporterTests  # include the qso.freedv.org handshake
 ./scripts/fetch-rade.sh                        # fetch the FreeDV RADE + Opus sources (not checked in) to enable RADE mode
-./scripts/build-app.sh                         # → build/Kymara.app (bundles librtlsdr + libusb, ad-hoc signed)
+./scripts/build-app.sh                         # → build/Kymara SDR.app (bundles librtlsdr + libusb, ad-hoc signed)
 ./scripts/make-dmg.sh [version]                # → build/Kymara-<version>.dmg (for GitHub releases)
 swift run -c release Kymara                    # run unbundled (uses a separate UserDefaults domain "Kymara")
 rtl_sdr -f 99000000 -s 2400000 -g 40 -n 19200000 out.cu8   # record raw IQ from the attached dongle for testing
 ```
 
 `scripts/check-sdrplay-shim.sh` checks `Sources/CSDRplay/include/sdrplay_shim.h` against the installed SDRplay API headers (run after an API upgrade). `scripts/check-licenses.sh` checks that the README's bundled-libraries table
-matches the librtlsdr, libusb, Sparkle and RADE versions in `build/Kymara.app` and that the app carries the license texts of all bundled libraries (run by `/release`). `scripts/make-icon.swift` regenerates `Resources/AppIcon.icns`. There is no linter. Releases: `/release <version>` (`.claude/skills/release/SKILL.md`) merges `develop` into `main`, tests, bumps the version, builds the DMG, tags, publishes a GitHub release and fast-forwards `develop` to `main`.
+matches the librtlsdr, libusb, Sparkle and RADE versions in `build/Kymara SDR.app` and that the app carries the license texts of all bundled libraries (run by `/release`). `scripts/make-icon.swift` regenerates `Resources/AppIcon.icns`. There is no linter. Releases: `/release <version>` (`.claude/skills/release/SKILL.md`) merges `develop` into `main`, tests, bumps the version, builds the DMG, tags, publishes a GitHub release and fast-forwards `develop` to `main`.
 
 ## Architecture
 
@@ -110,6 +110,6 @@ view or the LO moves.
 - Don't pass the same array to a vDSP call as both input and `&output` — it traps at runtime (exclusivity). Use the `inPlace` helper in `ArrayInPlace.swift`.
 - `AudioRingBuffer.read` returns silence *without consuming* until ~80 ms is buffered. A drain loop on a lower threshold never terminates (this once ate 400 GB of RAM in a test).
 - The title bar uses `.windowToolbarStyle(.unifiedCompact)`, where AppKit ignores title-bar double-clicks; `TitleBarDoubleClick.swift` performs the system action instead. Remove it if the toolbar style changes.
-- The terminal has Screen Recording permission: `screencapture -x -o -l <windowID>` grabs the app window (get the ID from `CGWindowListCopyWindowInfo`, owner "Kymara"). Synthetic clicks are untested; to get the app into a state (start the radio, force an appearance), add a temporary env-var hook in `RadioController.init` and remove it before committing.
+- The terminal has Screen Recording permission: `screencapture -x -o -l <windowID>` grabs the app window (get the ID from `CGWindowListCopyWindowInfo`, owner "Kymara SDR"). Synthetic clicks are untested; to get the app into a state (start the radio, force an appearance), add a temporary env-var hook in `RadioController.init` and remove it before committing.
 - The SDRplay API service keeps a device claimed for a while when the app is killed instead of quit (a test hook should quit with `NSApp.terminate`), so the next start reports "No SDRplay device found". `SDRplayTests.testStreamsFromAttachedDevice` streams from an attached RSP; it only runs with `KYMARA_HARDWARE_TESTS=1` (and is skipped without a free device).
 - An RTL-SDR and an SDRplay RSP1 are usually attached to this machine; real FM stations with RDS are around 99.4, 101.6 and 102.3 MHz. The demo source has RDS on 100.0 and 101.2 MHz.

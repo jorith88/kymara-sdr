@@ -86,7 +86,7 @@ struct SettingsView: View {
                 }
                 .disabled(!cluster.isEnabled)
             } footer: {
-                Text("Spots come from \(cluster.providerName).com, a community DX cluster. Kymara only checks for new spots while its window is visible.")
+                Text("Spots come from \(cluster.providerName).com, a community DX cluster. Kymara SDR only checks for new spots while its window is visible.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -102,7 +102,7 @@ struct SettingsView: View {
             } header: {
                 Text("Stations")
             } footer: {
-                Text("Lists the stations on qso.freedv.org in the side panel and labels the ones transmitting on the spectrum. Kymara only follows the list while its window is visible.")
+                Text("Lists the stations on qso.freedv.org in the side panel and labels the ones transmitting on the spectrum. Kymara SDR only follows the list while its window is visible.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -142,7 +142,7 @@ struct SettingsView: View {
 
     private var reporterStatus: String {
         let reporter = radio.reporter
-        let about = "While the radio runs in RADE mode, Kymara shows your station on qso.freedv.org as a receive-only "
+        let about = "While the radio runs in RADE mode, Kymara SDR shows your station on qso.freedv.org as a receive-only "
             + "station, with your callsign, locator, frequency and message and the callsigns you decode."
         guard reporter.isEnabled else { return about }
         guard reporter.isConfigured else { return "Enter your callsign and a 4- or 6-character locator to report." }
@@ -150,7 +150,7 @@ struct SettingsView: View {
         case .idle: return about
         case .connecting: return "Connecting to qso.freedv.org…"
         case .connected: return "Reporting to qso.freedv.org."
-        case .failed(let message): return "Can't reach qso.freedv.org (\(message)). Kymara will try again."
+        case .failed(let message): return "Can't reach qso.freedv.org (\(message)). Kymara SDR will try again."
         }
     }
 }

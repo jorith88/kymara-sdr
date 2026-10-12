@@ -147,7 +147,7 @@ final class FreeDVReporter {
             "role": "report",
             "callsign": Self.normalizedCallsign(callsign) ?? "",
             "grid_square": Self.normalizedLocator(locator) ?? "",
-            "version": "Kymara \(version)",
+            "version": "Kymara SDR \(version)",
             "rx_only": true,
             "os": "macos",
             "protocol_version": Self.protocolVersion,

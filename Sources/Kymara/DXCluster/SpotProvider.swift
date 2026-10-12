@@ -14,7 +14,7 @@ enum SpotProviderError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .http(let code): return "The DX cluster server returned an error (HTTP \(code))."
-        case .badResponse: return "The DX cluster server sent a response Kymara could not read."
+        case .badResponse: return "The DX cluster server sent a response Kymara SDR could not read."
         }
     }
 }

@@ -38,7 +38,7 @@ struct KymaraApp: App {
     }
 
     var body: some Scene {
-        Window("Kymara", id: "main") {
+        Window("Kymara SDR", id: "main") {
             ContentView()
                 .environment(radio)
                 .environment(dxCluster)

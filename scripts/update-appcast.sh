@@ -29,7 +29,7 @@ ITEM=$(mktemp)
 trap 'rm -f "$ITEM"' EXIT
 cat > "$ITEM" <<EOF
         <item>
-            <title>Kymara $VERSION</title>
+            <title>Kymara SDR $VERSION</title>
             <pubDate>$(LC_ALL=C date -u "+%a, %d %b %Y %H:%M:%S +0000")</pubDate>
             <sparkle:version>$BUILD</sparkle:version>
             <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
