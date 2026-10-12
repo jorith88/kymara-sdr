@@ -38,7 +38,7 @@ struct KymaraApp: App {
     }
 
     var body: some Scene {
-        Window("Kymara", id: "main") {
+        Window("Kymara SDR", id: "main") {
             ContentView()
                 .environment(radio)
                 .environment(dxCluster)
@@ -108,8 +108,14 @@ struct KymaraApp: App {
                 Button("Tune Down") { radio.tuneSteps(-1) }
                     .keyboardShortcut(.leftArrow, modifiers: [.command])
                 Divider()
-                Button("Add to Favourites") { radio.addBookmark() }
-                    .keyboardShortcut("d")
+                Menu("Band") { BandMenuItems(radio: radio) }
+                Button("Next Band") { radio.nextBand() }
+                    .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+                    .disabled(AmateurBand.above(radio.vfoFrequency) == nil)
+                Button("Previous Band") { radio.previousBand() }
+                    .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+                    .disabled(AmateurBand.below(radio.vfoFrequency) == nil)
+                Divider()
                 Toggle("Mute", isOn: $radio.muted)
                     .keyboardShortcut("m", modifiers: [.command, .shift])
                 Toggle("Auto Notch", isOn: $radio.autoNotch)
@@ -121,6 +127,12 @@ struct KymaraApp: App {
                 Button(radio.recordingIQ ? "Stop I/Q Recording" : "Record I/Q") { radio.toggleIQRecording() }
                     .keyboardShortcut("i", modifiers: [.command, .shift])
                 Button("Show Recordings in Finder") { radio.showRecordingsInFinder() }
+            }
+            CommandMenu("Favourites") {
+                Button("Add to Favourites") { radio.addBookmark() }
+                    .keyboardShortcut("d")
+                Divider()
+                FavouriteMenuItems(radio: radio)
             }
         }
 

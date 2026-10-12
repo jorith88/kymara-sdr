@@ -55,7 +55,7 @@ more, the file was hand-edited: commit the reformat separately first.
 `./scripts/make-dmg.sh <version>` → `build/Kymara-<version>.dmg`. Then verify:
 
 - `hdiutil verify` reports a VALID checksum.
-- Mount it read-only (`hdiutil attach -nobrowse -readonly`). It must contain `Kymara.app` and an `Applications`
+- Mount it read-only (`hdiutil attach -nobrowse -readonly`). It must contain `Kymara SDR.app` and an `Applications`
   symlink, `Contents/Frameworks` must contain `librtlsdr.0.dylib`, `libusb-1.0.0.dylib` and `Sparkle.framework`,
   the app's Info.plist must have the new `CFBundleVersion`, and `codesign -v --deep` must pass. Detach it afterwards.
 
@@ -77,11 +77,11 @@ CLAUDE.md, scripts). Always end with this install section (the update dialog in 
 ```markdown
 ## Install
 
-1. Download `Kymara-<version>.dmg`, open it and drag **Kymara** to **Applications**.
-2. The app is ad-hoc signed, not notarized. On first launch macOS will block it: right-click Kymara → **Open**, or
+1. Download `Kymara-<version>.dmg`, open it and drag **Kymara SDR** to **Applications**.
+2. The app is ad-hoc signed, not notarized. On first launch macOS will block it: right-click Kymara SDR → **Open**, or
    allow it under System Settings → Privacy & Security → **Open Anyway**.
 
-Already installed? Use **Kymara → Check for Updates…**; updates installed from within the app need no approval.
+Already installed? Use **Kymara SDR → Check for Updates…**; updates installed from within the app need no approval.
 librtlsdr and libusb are bundled, so Homebrew is not required. Requires Apple silicon and macOS 14 or later.
 ```
 
@@ -96,7 +96,7 @@ copies accept.
 
 - Commit `Resources/Info.plist`, `appcast.xml` and, if step 5 updated it, `README.md`: `Release <version>`
   (no Co-Authored-By trailer).
-- Create an annotated tag: `git tag -a v<version> -m "Kymara <version>"`.
+- Create an annotated tag: `git tag -a v<version> -m "Kymara SDR <version>"`.
 - `git push origin v<version>`. Push only the tag for now: installed apps read the appcast from `main`, so `main`
   is pushed after the DMG is downloadable (step 10).
 
@@ -106,7 +106,7 @@ background (every 20 s, a few minutes), then check with `git ls-remote origin`.
 ## 9. Publish
 
 ```bash
-gh release create v<version> build/Kymara-<version>.dmg --verify-tag --title "Kymara <version>" \
+gh release create v<version> build/Kymara-<version>.dmg --verify-tag --title "Kymara SDR <version>" \
   --notes-file <notes> [--prerelease]
 ```
 

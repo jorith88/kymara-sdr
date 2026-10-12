@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds "Kymara.app" (arm64, release) into ./build, bundling librtlsdr + libusb when available.
+# Builds "Kymara SDR.app" (arm64, release) into ./build, bundling librtlsdr + libusb when available.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 
 swift build -c release --arch arm64
 BIN_DIR=$(swift build -c release --arch arm64 --show-bin-path)
-APP="build/Kymara.app"
+APP="build/Kymara SDR.app"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Frameworks" "$APP/Contents/Resources"

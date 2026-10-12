@@ -75,6 +75,9 @@ final class RadioController {
     var step: Double = 100_000 { didSet { steps[mode.rawValue] = step; scheduleSave() } }
     @ObservationIgnored private var bandwidths: [String: Double] = [:]
     @ObservationIgnored private var steps: [String: Double] = [:]
+    /// Where the radio was last tuned on each amateur band, by band name.
+    @ObservationIgnored private var bandStack: [String: BandMemory] = [:]
+    @ObservationIgnored private var bandStackPaused = false
 
     // MARK: RF
     var sampleRate: Double = 2_400_000 { didSet { if sampleRate != oldValue { sampleRateChanged() } } }
@@ -585,6 +588,7 @@ final class RadioController {
         c.waterfallRate = waterfallSpeed
         c.averaging = Float(averaging)
         engine.config = c
+        rememberBand()
         scheduleSave()
     }
 
@@ -704,15 +708,19 @@ final class RadioController {
     }
 
     func recall(_ b: Bookmark) {
-        mode = DemodMode.available.contains(b.mode) ? b.mode : .usb
-        bandwidth = min(b.bandwidth, maxBandwidth)
-        jump(to: b.frequency)
+        retune {
+            mode = DemodMode.available.contains(b.mode) ? b.mode : .usb
+            bandwidth = min(b.bandwidth, maxBandwidth)
+            jump(to: b.frequency)
+        }
     }
 
     /// Tunes to a DX spot in its mode, keeping the bandwidth last used in that mode.
     func tune(to spot: DXSpot) {
-        mode = spot.demodMode
-        jump(to: spot.frequency)
+        retune {
+            mode = spot.demodMode
+            jump(to: spot.frequency)
+        }
     }
 
     func addBookmark(_ spot: DXSpot) {
@@ -728,8 +736,10 @@ final class RadioController {
 
     /// Tunes to a FreeDV Reporter station's dial frequency.
     func tune(to station: FreeDVStation) {
-        mode = Self.demodMode(for: station)
-        jump(to: station.frequency)
+        retune {
+            mode = Self.demodMode(for: station)
+            jump(to: station.frequency)
+        }
     }
 
     func addBookmark(_ station: FreeDVStation) {
@@ -749,6 +759,47 @@ final class RadioController {
             viewOffset = vfoFrequency - centerFrequency
             clampView()
         }
+    }
+
+    // MARK: - Bands
+
+    var currentBand: AmateurBand? { AmateurBand.containing(vfoFrequency) }
+
+    /// Tunes to where the radio was last on `band` (its band stack entry), or to its home frequency.
+    func selectBand(_ band: AmateurBand) {
+        let m = bandStack[band.name]
+        retune {
+            if let m {
+                mode = DemodMode.available.contains(m.mode) ? m.mode : DXSpot.sidebandConvention(m.frequency)
+                bandwidth = min(m.bandwidth, maxBandwidth)
+            } else {
+                mode = band.mode
+            }
+            jump(to: m?.frequency ?? band.home)
+        }
+    }
+
+    func nextBand() {
+        if let b = AmateurBand.above(vfoFrequency) { selectBand(b) }
+    }
+
+    func previousBand() {
+        if let b = AmateurBand.below(vfoFrequency) { selectBand(b) }
+    }
+
+    /// Records the current frequency, mode and bandwidth as the band stack entry of the band the VFO is in.
+    private func rememberBand() {
+        guard !loading, !bandStackPaused, let band = currentBand else { return }
+        bandStack[band.name] = BandMemory(frequency: vfoFrequency, mode: mode, bandwidth: bandwidth)
+    }
+
+    /// Changes mode, bandwidth and frequency together. The intermediate states (the new mode on the old
+    /// frequency) would otherwise end up in the band stack of the band being left.
+    private func retune(_ body: () -> Void) {
+        bandStackPaused = true
+        body()
+        bandStackPaused = false
+        rememberBand()
     }
 
     static let defaultBookmarks: [Bookmark] = [
@@ -787,6 +838,7 @@ final class RadioController {
         sdrplay = s.sdrplay
         bandwidths = s.bandwidths
         steps = s.steps
+        bandStack = s.bandStack
         sampleRate = s.sampleRate
         // A mode this build lacks (RADE without its sources) falls back to its sideband.
         let savedMode = DemodMode.available.contains(s.mode) ? s.mode : .usb
@@ -856,6 +908,7 @@ final class RadioController {
         var st = steps
         st[mode.rawValue] = step
         s.steps = st
+        s.bandStack = bandStack
         s.sampleRate = sampleRate
         s.gainAuto = gainAuto
         s.gain = gain

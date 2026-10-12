@@ -117,6 +117,15 @@ final class FreeDVStationStoreTests: XCTestCase {
         XCTAssertEqual(store.listedStations.filter { $0.callsign.uppercased() == "K0RO" }.count, 2)
     }
 
+    func testBogusFrequencyIsIgnored() {
+        let store = loadedStore()
+        for freq in [1e300, Double.infinity, -5.0] {
+            store.apply("freq_change", ["sid": "X", "callsign": "PA0BAD", "freq": freq])
+            XCTAssertEqual(store.stations["X"]?.frequency, 0)
+            XCTAssertFalse(store.listedStations.contains { $0.callsign == "PA0BAD" })
+        }
+    }
+
     func testBandScopeAndOrder() {
         let store = loadedStore()
         XCTAssertEqual(store.stations(scope: .band, vfo: 7_100_000).map(\.callsign), ["ZL2IT", "JG2FFB"],
@@ -169,6 +178,13 @@ final class FreeDVStationStoreTests: XCTestCase {
         XCTAssertEqual(AmateurBand.containing(7_177_000)?.name, "40 m")
         XCTAssertEqual(AmateurBand.containing(14_236_000)?.name, "20 m")
         XCTAssertNil(AmateurBand.containing(9_000_000))
+        XCTAssertEqual(AmateurBand.above(7_100_000)?.name, "30 m", "skips the band it is in")
+        XCTAssertEqual(AmateurBand.below(7_100_000)?.name, "60 m")
+        XCTAssertEqual(AmateurBand.above(9_000_000)?.name, "30 m")
+        XCTAssertEqual(AmateurBand.below(9_000_000)?.name, "40 m")
+        XCTAssertNil(AmateurBand.above(433_000_000))
+        XCTAssertNil(AmateurBand.below(1_900_000))
+        for band in AmateurBand.all { XCTAssertTrue(band.range.contains(band.home), band.name) }
     }
 
     func testSettingsPersistence() {

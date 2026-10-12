@@ -1,11 +1,11 @@
 #!/bin/bash
-# Checks that the bundled-libraries table in README.md lists the versions that build/Kymara.app ships, and that
+# Checks that the bundled-libraries table in README.md lists the versions that build/Kymara SDR.app ships, and that
 # the app carries the license texts of every bundled library.
 # Run after scripts/build-app.sh. On a mismatch it prints the correct table rows and exits 1.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-APP=build/Kymara.app
+APP="build/Kymara SDR.app"
 [ -d "$APP" ] || { echo "error: $APP not found; run scripts/build-app.sh first" >&2; exit 1; }
 
 # Same lookup as build-app.sh; the Homebrew Cellar path holds the version (…/Cellar/<name>/<version>/lib/…).

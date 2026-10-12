@@ -35,6 +35,7 @@ struct RadioSettings: Codable {
     var mode: DemodMode = .wfm
     var bandwidths: [String: Double] = [:]
     var steps: [String: Double] = [:]
+    var bandStack: [String: BandMemory] = [:]
     var sampleRate: Double = 2_400_000
     var gainAuto = false
     var gain = 297
@@ -99,6 +100,7 @@ extension RadioSettings {
         read(.mode, &mode)
         read(.bandwidths, &bandwidths)
         read(.steps, &steps)
+        read(.bandStack, &bandStack)
         read(.sampleRate, &sampleRate)
         read(.gainAuto, &gainAuto)
         read(.gain, &gain)
