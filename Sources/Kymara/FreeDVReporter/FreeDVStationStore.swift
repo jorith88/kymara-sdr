@@ -160,7 +160,8 @@ final class FreeDVStationStore {
             stations[sid] = nil
         case "freq_change":
             update(sid, data) { s in
-                if let f = Self.number(data["freq"]) { s.frequency = f }
+                // Clients report whatever they like; a huge or non-finite value would trap in `Int(_:)`.
+                if let f = Self.number(data["freq"]) { s.frequency = f.isFinite && f > 0 && f < 1e12 ? f : 0 }
             }
         case "tx_report":
             update(sid, data) { s in
