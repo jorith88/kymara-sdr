@@ -6,6 +6,26 @@
         <link>https://github.com/jorith88/kymara-sdr</link>
         <!-- items -->
         <item>
+            <title>Kymara SDR 1.0.0-beta.9</title>
+            <pubDate>Mon, 12 Oct 2026 14:25:41 +0000</pubDate>
+            <sparkle:version>9</sparkle:version>
+            <sparkle:shortVersionString>1.0.0-beta.9</sparkle:shortVersionString>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>What's new</h2>
+<ul>
+<li><strong>New name: Kymara SDR.</strong> The app is now called Kymara SDR in the menu bar and the window title. Your settings, favourites and recordings carry over unchanged.</li>
+<li><strong>Amateur band switching.</strong> Pick a band under <strong>Radio → Band</strong>, from the ribbon's Band menu, or step through them with <strong>Next/Previous Band</strong> (⌥⌘↑ / ⌥⌘↓). Each band remembers the frequency, mode and bandwidth you last used on it.</li>
+<li><strong>Favourites menu.</strong> Favourites have their own menu in the menu bar, so you can tune to one without opening the side panel. <strong>Add to Favourites</strong> has moved there from the Radio menu.</li>
+<li><strong>Better contrast in light mode.</strong> The spectrum and waterfall are easier to read with the light appearance.</li>
+</ul>
+<h2>Fixes</h2>
+<ul>
+<li>The app no longer crashes when a station on FreeDV Reporter reports an invalid frequency.</li>
+</ul>]]></description>
+            <enclosure url="https://github.com/jorith88/kymara-sdr/releases/download/v1.0.0-beta.9/Kymara-1.0.0-beta.9.dmg" sparkle:edSignature="9Q+/oG8bwXvynYL5XP3mY3KCeJ4qf8UG4bb/oJRayfaxxzC99b6QhyVsPD4ET/MqPzmEKFGJxfBNsqhLXEjIBQ==" length="12027048" type="application/octet-stream"/>
+        </item>
+        <item>
             <title>Kymara 1.0.0-beta.8</title>
             <pubDate>Sun, 11 Oct 2026 06:36:31 +0000</pubDate>
             <sparkle:version>8</sparkle:version>
