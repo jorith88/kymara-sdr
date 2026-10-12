@@ -198,6 +198,7 @@ struct ContentView: View {
             cluster.isPaused = !visible
             freedv.isPaused = !visible
         })
+        .onChange(of: radio.reporter.callsign, initial: true) { _, call in freedv.ownCallsign = call }
         // Identified items make the toolbar user-customizable (View > Customize Toolbar…).
         .toolbar(id: "main") {
             ToolbarItem(id: "zoomOut", placement: .primaryAction) {

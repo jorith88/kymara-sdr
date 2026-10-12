@@ -117,6 +117,14 @@ final class FreeDVStationStoreTests: XCTestCase {
         XCTAssertEqual(store.listedStations.filter { $0.callsign.uppercased() == "K0RO" }.count, 2)
     }
 
+    func testOwnCallsignIsNotListed() {
+        let store = loadedStore()
+        store.ownCallsign = " zl2it "
+        XCTAssertEqual(Set(store.listedStations.map(\.callsign)), ["K0RO", "JG2FFB"])
+        store.ownCallsign = ""
+        XCTAssertTrue(store.listedStations.contains { $0.callsign == "ZL2IT" })
+    }
+
     func testBogusFrequencyIsIgnored() {
         let store = loadedStore()
         for freq in [1e300, Double.infinity, -5.0] {

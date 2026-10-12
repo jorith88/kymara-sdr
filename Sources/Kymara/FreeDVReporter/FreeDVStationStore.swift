@@ -65,6 +65,8 @@ final class FreeDVStationStore {
     var scope: FreeDVStationScope = .band { didSet { save() } }
     /// Set while no Kymara window is visible: the connection closes, the list stays until it reopens.
     var isPaused = false { didSet { if isPaused != oldValue { reconcile() } } }
+    /// Our own reporting callsign (from the FreeDV Reporter settings); its sessions are not listed.
+    var ownCallsign = ""
 
     @ObservationIgnored private let makeTransport: @MainActor (String, [String: Any]) -> ReporterTransport
     @ObservationIgnored private let now: () -> Date
@@ -96,11 +98,12 @@ final class FreeDVStationStore {
 
     // MARK: Queries
 
-    /// Stations with a callsign and a frequency (the server also lists anonymous viewers). A station
-    /// connected more than once on the same frequency is listed once, by its most active session.
+    /// Stations with a callsign and a frequency (the server also lists anonymous viewers), except our own.
+    /// A station connected more than once on the same frequency is listed once, by its most active session.
     var listedStations: [FreeDVStation] {
+        let own = ownCallsign.trimmingCharacters(in: .whitespaces).uppercased()
         var best: [String: FreeDVStation] = [:]
-        for s in stations.values where !s.callsign.isEmpty && s.frequency > 0 {
+        for s in stations.values where !s.callsign.isEmpty && s.frequency > 0 && s.callsign.uppercased() != own {
             let key = "\(s.callsign.uppercased())@\(Int(s.frequency))"
             if let other = best[key], !Self.isMoreActive(s, than: other) { continue }
             best[key] = s
