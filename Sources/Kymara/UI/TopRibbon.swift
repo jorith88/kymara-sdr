@@ -104,6 +104,16 @@ struct TopRibbon: View {
                 .fixedSize()
                 HStack(spacing: 6) {
                     Menu {
+                        BandMenuItems(radio: radio)
+                    } label: {
+                        Text(radio.currentBand.map { "Band \($0.name)" } ?? "Band")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .controlSize(.small)
+                    .help("Switch amateur band (⌥⌘↑, ⌥⌘↓); each band returns to where you last listened")
+
+                    Menu {
                         ForEach(RadioController.steps, id: \.self) { s in
                             Button(FrequencyFormat.bandwidth(s)) { radio.step = s }
                         }

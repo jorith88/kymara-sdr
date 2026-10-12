@@ -280,29 +280,3 @@ final class FreeDVStationStore {
         state = .idle
     }
 }
-
-/// Amateur HF and VHF bands (the widest allocation of the IARU regions), for the "current band" filter.
-struct AmateurBand: Equatable, Sendable {
-    var name: String
-    var range: ClosedRange<Double>
-
-    static let all: [AmateurBand] = [
-        .init(name: "160 m", range: 1_800_000...2_000_000),
-        .init(name: "80 m", range: 3_500_000...4_000_000),
-        .init(name: "60 m", range: 5_250_000...5_450_000),
-        .init(name: "40 m", range: 7_000_000...7_300_000),
-        .init(name: "30 m", range: 10_100_000...10_150_000),
-        .init(name: "20 m", range: 14_000_000...14_350_000),
-        .init(name: "17 m", range: 18_068_000...18_168_000),
-        .init(name: "15 m", range: 21_000_000...21_450_000),
-        .init(name: "12 m", range: 24_890_000...24_990_000),
-        .init(name: "10 m", range: 28_000_000...29_700_000),
-        .init(name: "6 m", range: 50_000_000...54_000_000),
-        .init(name: "2 m", range: 144_000_000...148_000_000),
-        .init(name: "70 cm", range: 420_000_000...450_000_000),
-    ]
-
-    static func containing(_ frequency: Double) -> AmateurBand? {
-        all.first { $0.range.contains(frequency) }
-    }
-}

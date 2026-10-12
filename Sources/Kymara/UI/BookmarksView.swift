@@ -12,9 +12,7 @@ struct BookmarksView: View {
             f.isEmpty || $0.name.lowercased().contains(f) || $0.group.lowercased().contains(f)
                 || FrequencyFormat.dotted($0.frequency).contains(f)
         }
-        return Dictionary(grouping: items, by: \.group)
-            .map { ($0.key, $0.value.sorted { $0.frequency < $1.frequency }) }
-            .sorted { $0.0 < $1.0 }
+        return Bookmark.grouped(items)
     }
 
     var body: some View {
@@ -87,6 +85,15 @@ struct BookmarksView: View {
         radio.bookmarks[i].frequency = radio.vfoFrequency
         radio.bookmarks[i].mode = radio.mode
         radio.bookmarks[i].bandwidth = radio.bandwidth
+    }
+}
+
+extension Bookmark {
+    /// Favourites by group, groups by name and each group by frequency.
+    static func grouped(_ items: [Bookmark]) -> [(String, [Bookmark])] {
+        Dictionary(grouping: items, by: \.group)
+            .map { ($0.key, $0.value.sorted { $0.frequency < $1.frequency }) }
+            .sorted { $0.0 < $1.0 }
     }
 }
 

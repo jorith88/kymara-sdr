@@ -41,6 +41,19 @@ final class PersistenceTests: XCTestCase {
         XCTAssertEqual(loaded?.autoNotch, true)
     }
 
+    func testBandStackRoundTrip() {
+        var s = RadioSettings()
+        s.bandStack = ["40 m": BandMemory(frequency: 7_074_000, mode: .usb, bandwidth: 3_000)]
+        store.saveSettings(s)
+        XCTAssertEqual(store.loadSettings()?.bandStack["40 m"], BandMemory(frequency: 7_074_000, mode: .usb, bandwidth: 3_000))
+
+        // An entry from a build with another mode keeps its frequency and falls back to the sideband.
+        storeRawSettings(#"{"bandStack": {"80 m": {"frequency": 3700000, "mode": "FT8"}}}"#)
+        let m = store.loadSettings()?.bandStack["80 m"]
+        XCTAssertEqual(m?.frequency, 3_700_000)
+        XCTAssertEqual(m?.mode, .lsb)
+    }
+
     func testMissingFieldsKeepTheRest() {
         // Simulates settings written by an older version that lacked most fields.
         storeRawSettings(#"{"vfo": 7100000, "mode": "LSB"}"#)
