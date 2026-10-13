@@ -145,6 +145,13 @@ final class PersistenceTests: XCTestCase {
         XCTAssertEqual(store.loadBookmarks(legacy: nil), b)
     }
 
+    func testRemovedDSBModeLoadsAsAM() {
+        storeRawSettings(#"{"vfo": 7100000, "mode": "DSB"}"#)
+        XCTAssertEqual(store.loadSettings()?.mode, .am)
+        let b = try? JSONDecoder().decode(Bookmark.self, from: Data(#"{"name": "Old", "frequency": 7100000, "mode": "DSB", "bandwidth": 6000}"#.utf8))
+        XCTAssertEqual(b?.mode, .am)
+    }
+
     func testLegacyBookmarksAreMigrated() {
         storeRawSettings(#"{"vfo": 100000000, "bookmarks": [{"name": "Old", "frequency": 124000000, "mode": "AM", "bandwidth": 8000, "group": "Aviation", "id": "6F1B2C9A-9A57-4D2E-9C0B-0B5A2E2F3A11"}]}"#)
         let s = store.loadSettings()

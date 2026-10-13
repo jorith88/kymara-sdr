@@ -45,7 +45,7 @@ layouts still matches the installed headers.
 demo generator with FM broadcast, AM, NFM, SSB and CW signals, so everything also works without hardware.
 
 **Receiver:** AM, NFM, WFM (stereo with a 19 kHz pilot PLL, 50/75 µs de-emphasis), USB, LSB, CW (adjustable
-pitch), DSB and RADE/RADE2 (FreeDV digital voice V1/V2). Adjustable bandwidth (presets or by dragging the filter edges), tuning step, AGC
+pitch) and RADE/RADE2 (FreeDV digital voice V1/V2). Adjustable bandwidth (presets or by dragging the filter edges), tuning step, AGC
 (off/fast/medium/slow) or manual AF gain, squelch with hysteresis (level, or auto on carrier-to-noise ratio in FM modes), volume/mute.
 
 **FreeDV RADE:** receives FreeDV's RADE V1 (mode RADE) and V2 (mode RADE2) digital voice: a neural decoder and the

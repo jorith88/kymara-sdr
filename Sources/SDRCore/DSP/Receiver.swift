@@ -430,7 +430,7 @@ final class Receiver {
                         let deviation = c.bandwidth / 5
                         fm.process(re: re, im: im, count: n, gain: Float(ra / (2 * .pi * deviation)), output: out)
                         nfmAudio.process(out, count: n)
-                    case .usb, .lsb, .dsb:
+                    case .usb, .lsb:
                         out.update(from: re, count: n)
                         if useNotch { notch.process(out, count: n, maxFrequency: notchMax) }
                         agc.process(out, count: n, mode: c.agcMode, manualGainDB: c.afGainDB)
