@@ -1,5 +1,5 @@
-// RADE V1 receiver: the FreeDV Radio Autoencoder demodulator/decoder (rade_c) followed by the FARGAN vocoder
-// (Opus), behind one small API. The library sources are fetched by scripts/fetch-rade.sh.
+// RADE V1 and V2 receivers: the FreeDV Radio Autoencoder demodulator/decoder (rade_c) followed by the FARGAN
+// vocoder (Opus), behind one small API. The library sources are fetched by scripts/fetch-rade.sh.
 
 #ifndef KYMARA_RADE_H
 #define KYMARA_RADE_H
@@ -17,7 +17,9 @@ typedef struct kymara_rade kymara_rade;
 /// 0 when the RADE sources were not fetched; everything below is then a stub and open returns NULL.
 int kymara_rade_available(void);
 
-kymara_rade *kymara_rade_open(void);
+/// Opens a receiver for RADE V1 (`version` 1) or V2 (`version` 2). Both take the same modem input and give the
+/// same speech output; only V1 sends a callsign at the end of an over.
+kymara_rade *kymara_rade_open(int version);
 void kymara_rade_close(kymara_rade *k);
 
 /// Most speech samples one modem frame can produce; `speech_capacity` must be at least this.

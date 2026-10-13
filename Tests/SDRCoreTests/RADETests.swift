@@ -8,10 +8,14 @@ final class RADETests: XCTestCase {
         return (x.reduce(0) { $0 + $1 * $1 } / Float(x.count)).squareRoot()
     }
 
-    /// 12 s of a real RADE V1 over as received in USB (8 kHz mono): in sync from ~0.6 s, end of over at ~10.6 s
-    /// (callsign VK5KVA), then no signal. From the rade_c repository (FDV_offair.wav).
-    private func loadFixture() throws -> [Float] {
-        let url = try XCTUnwrap(Bundle.module.resourceURL?.appendingPathComponent("Fixtures/rade_v1_offair_8k.wav"))
+    /// `rade_v1_offair_8k.wav`: 12 s of a real RADE V1 over as received in USB (8 kHz mono): in sync from ~0.6 s,
+    /// end of over at ~10.6 s (callsign VK5KVA), then no signal. From the rade_c repository (FDV_offair.wav).
+    ///
+    /// `rade_v2_8k.wav`: 13 s of RADE V2 in USB (8 kHz mono): 1 s of noise, a 10 s over ending in an end-of-over
+    /// frame, 2 s of noise; about 12 dB SNR. rade_c's `rade_tx_wav --v2` (commit c8a3dc1) on its input_sample.wav,
+    /// with white noise added.
+    private func loadFixture(_ name: String = "rade_v1_offair_8k") throws -> [Float] {
+        let url = try XCTUnwrap(Bundle.module.resourceURL?.appendingPathComponent("Fixtures/\(name).wav"))
         let data = try Data(contentsOf: url)
         // 16-bit mono PCM with a plain 44-byte header.
         XCTAssertEqual(String(decoding: data[36..<40], as: UTF8.self), "data")
@@ -50,12 +54,14 @@ final class RADETests: XCTestCase {
         }
     }
 
-    func testDecodesOffAirRecording() throws {
-        try XCTSkipUnless(RADEDecoder.isAvailable, "RADE not built (scripts/fetch-rade.sh)")
+    /// Feeds a fixture (as a real USB signal at 48 kHz) to a decoder; returns the decoder, the speech and
+    /// whether and how well it synced.
+    private func decode(_ fixture: String, version: Int)
+        throws -> (decoder: RADEDecoder, speech: [Float], synced: Bool, bestSNR: Float, rate: Double) {
         let rate = 48_000.0
-        let x = upsample(try loadFixture(), from: 8_000, to: rate)
+        let x = upsample(try loadFixture(fixture), from: 8_000, to: rate)
         let zeros = [Float](repeating: 0, count: x.count)
-        let decoder = RADEDecoder(rate: rate)
+        let decoder = RADEDecoder(rate: rate, version: version)
         var speech = [Float](repeating: 0, count: x.count)
         var everSynced = false
         var bestSNR: Float = -100
@@ -77,7 +83,13 @@ final class RADETests: XCTestCase {
             }
             pos += n
         }
-        XCTAssertTrue(everSynced)
+        return (decoder, speech, everSynced, bestSNR, rate)
+    }
+
+    func testDecodesOffAirRecording() throws {
+        try XCTSkipUnless(RADEDecoder.isAvailable, "RADE not built (scripts/fetch-rade.sh)")
+        let (decoder, speech, synced, bestSNR, rate) = try decode("rade_v1_offair_8k", version: 1)
+        XCTAssertTrue(synced)
         XCTAssertGreaterThan(bestSNR, 15)
         // The over ends with an end-of-over frame carrying the operator's callsign.
         XCTAssertEqual(decoder.status.callsign, "VK5KVA")
@@ -87,6 +99,27 @@ final class RADETests: XCTestCase {
         XCTAssertGreaterThan(during, 0.02, "speech while in sync")
         XCTAssertFalse(decoder.status.sync, "end of over")
         XCTAssertLessThan(rms(speech[(11 * r)...]), during * 0.01, "silence after the over")
+    }
+
+    func testDecodesV2() throws {
+        try XCTSkipUnless(RADEDecoder.isAvailable, "RADE not built (scripts/fetch-rade.sh)")
+        let (decoder, speech, synced, bestSNR, rate) = try decode("rade_v2_8k", version: 2)
+        XCTAssertTrue(synced)
+        XCTAssertGreaterThan(bestSNR, 8)
+        XCTAssertEqual(decoder.status.endOfOvers, 1)
+        XCTAssertNil(decoder.status.callsign, "V2 sends no callsign")
+        let r = Int(rate)
+        let during = rms(speech[(2 * r)..<(9 * r)])
+        XCTAssertGreaterThan(during, 0.02, "speech while in sync")
+        XCTAssertFalse(decoder.status.sync, "end of over")
+        XCTAssertLessThan(rms(speech[(12 * r)...]), during * 0.01, "silence after the over")
+    }
+
+    /// Each version only syncs on its own signal.
+    func testVersionsDontCrossDecode() throws {
+        try XCTSkipUnless(RADEDecoder.isAvailable, "RADE not built (scripts/fetch-rade.sh)")
+        XCTAssertFalse(try decode("rade_v2_8k", version: 1).synced, "V2 signal in the V1 decoder")
+        XCTAssertFalse(try decode("rade_v1_offair_8k", version: 2).synced, "V1 signal in the V2 decoder")
     }
 
     func testSidebandConvention() {
@@ -100,11 +133,11 @@ final class RADETests: XCTestCase {
     }
 
     /// The over 30 kHz above the tuner centre as 240 kHz I/Q, in USB or (mirrored) in LSB.
-    private func makeIQ(lsb: Bool) throws -> [Int16] {
+    private func makeIQ(_ fixture: String, lsb: Bool) throws -> [Int16] {
         let fs = 240_000.0
         let vfo = 30_000.0
         // Analytic version of the real recording (keep 0.1–3.6 kHz, drop the negative frequencies).
-        let audio = try loadFixture()
+        let audio = try loadFixture(fixture)
         let taps = FIR.complexBandpass(lo: 100 / 8_000, hi: 3_600 / 8_000, transition: 200 / 8_000)
         let filter = FFTFilter(tapsRe: taps.re, tapsIm: taps.im)
         let zeros = [Float](repeating: 0, count: audio.count)
@@ -125,14 +158,15 @@ final class RADETests: XCTestCase {
     }
 
     /// Runs the engine in RADE mode; returns whether it synced and the audio.
-    private func receive(_ iq: [Int16], lsb: Bool) -> (synced: Bool, audio: [Float], rate: Double, callsign: String?) {
+    private func receive(_ iq: [Int16], mode: DemodMode, lsb: Bool)
+        -> (synced: Bool, audio: [Float], rate: Double, callsign: String?) {
         let engine = DSPEngine()
         var c = DSPConfig()
         c.sampleRate = 240_000
         c.vfoA.vfoOffset = 30_000
-        c.vfoA.mode = .rade
+        c.vfoA.mode = mode
         c.vfoA.radeLSB = lsb
-        c.vfoA.bandwidth = DemodMode.rade.defaultBandwidth
+        c.vfoA.bandwidth = mode.defaultBandwidth
         c.vfoA.volume = 1
         engine.config = c
         var audioOut: [Float] = []
@@ -153,17 +187,21 @@ final class RADETests: XCTestCase {
         return (everSynced, audioOut, engine.status.audioRate, engine.status.vfoA.rade?.callsign)
     }
 
-    /// The whole chain, in both sidebands. The wrong sideband sees a mirrored signal and must not sync.
+    /// The whole chain, in both sidebands and both versions. The wrong sideband sees a mirrored signal and must
+    /// not sync.
     func testEngineRADEEndToEnd() throws {
         try XCTSkipUnless(RADEDecoder.isAvailable, "RADE not built (scripts/fetch-rade.sh)")
-        for lsb in [false, true] {
-            let iq = try makeIQ(lsb: lsb)
-            let right = receive(iq, lsb: lsb)
-            XCTAssertTrue(right.synced, lsb ? "LSB" : "USB")
-            XCTAssertEqual(right.callsign, "VK5KVA", lsb ? "LSB" : "USB")
-            let r = Int(right.rate)
-            XCTAssertGreaterThan(rms(right.audio[(2 * r)..<(9 * r)]), 0.02, lsb ? "LSB" : "USB")
-            XCTAssertFalse(receive(iq, lsb: !lsb).synced, lsb ? "LSB signal in USB" : "USB signal in LSB")
+        for (mode, fixture, callsign) in [(DemodMode.rade, "rade_v1_offair_8k", "VK5KVA"), (.radeV2, "rade_v2_8k", nil)] {
+            for lsb in [false, true] {
+                let what = "\(mode.rawValue) \(lsb ? "LSB" : "USB")"
+                let iq = try makeIQ(fixture, lsb: lsb)
+                let right = receive(iq, mode: mode, lsb: lsb)
+                XCTAssertTrue(right.synced, what)
+                XCTAssertEqual(right.callsign, callsign, what)
+                let r = Int(right.rate)
+                XCTAssertGreaterThan(rms(right.audio[(2 * r)..<(9 * r)]), 0.02, what)
+                XCTAssertFalse(receive(iq, mode: mode, lsb: !lsb).synced, "\(what) in the other sideband")
+            }
         }
     }
 }

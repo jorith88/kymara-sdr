@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SDRCore
 
 /// Reports RADE reception to FreeDV Reporter (qso.freedv.org), the live map of FreeDV activity, as a
 /// receive-only station: our callsign, locator and frequency, and the callsigns we decode with their SNR.
@@ -9,7 +10,8 @@ import Observation
 @Observable
 final class FreeDVReporter {
     static let host = "qso.freedv.org"
-    static let modeName = "RADEV1"
+    /// The mode as FreeDV Reporter names it.
+    static func modeName(for mode: DemodMode) -> String { mode == .radeV2 ? "RADEV2" : "RADEV1" }
     static let protocolVersion = 2
     /// While in sync without a decoded callsign, a report with an empty callsign this often, so the map
     /// shows that we hear *something* (freedv-gui does the same).
@@ -47,6 +49,7 @@ final class FreeDVReporter {
     @ObservationIgnored private var loading = false
     @ObservationIgnored private var active = false
     @ObservationIgnored private var frequency = 0
+    @ObservationIgnored private var modeName = FreeDVReporter.modeName(for: .rade)
     @ObservationIgnored private var frequencyChangedAt: Date?
     @ObservationIgnored private var sentFrequency: Int?
     @ObservationIgnored private var settingsChangedAt: Date?
@@ -86,8 +89,13 @@ final class FreeDVReporter {
     // MARK: Driven by RadioController
 
     /// Called from the status poll (and on stop). Connects or disconnects as `active` changes, and sends
-    /// frequency and settings changes once they have settled.
-    func update(active: Bool, frequency: Double) {
+    /// frequency and settings changes once they have settled; a change of RADE version is sent right away.
+    func update(active: Bool, frequency: Double, mode: DemodMode = .rade) {
+        let name = Self.modeName(for: mode)
+        if name != modeName {
+            modeName = name
+            if isFullyConnected { transport?.emit("tx_report", ["mode": name, "transmitting": false]) }
+        }
         let f = Int(frequency.rounded())
         if f != self.frequency {
             self.frequency = f
@@ -120,7 +128,7 @@ final class FreeDVReporter {
         let t = now()
         if callsign == nil, let last = lastReport, t.timeIntervalSince(last) < Self.syncReportInterval { return }
         lastReport = t
-        transport?.emit("rx_report", ["callsign": callsign ?? "", "mode": Self.modeName,
+        transport?.emit("rx_report", ["callsign": callsign ?? "", "mode": modeName,
                                       "snr": Int(snr.rounded())])
     }
 
@@ -172,7 +180,7 @@ final class FreeDVReporter {
         consecutiveFailures = 0
         state = .connected
         sendFrequency()
-        transport?.emit("tx_report", ["mode": Self.modeName, "transmitting": false])
+        transport?.emit("tx_report", ["mode": modeName, "transmitting": false])
         sendMessage()
     }
 

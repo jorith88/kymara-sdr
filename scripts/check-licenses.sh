@@ -36,7 +36,7 @@ EXPECTED=(
 "| [librtlsdr](https://github.com/steve-m/librtlsdr) | $RTL_VERSION | GPL-2.0-or-later | [v$RTL_VERSION](https://github.com/steve-m/librtlsdr/archive/refs/tags/v$RTL_VERSION.tar.gz) |"
 "| [libusb](https://libusb.info) | $USB_VERSION | LGPL-2.1-or-later | [v$USB_VERSION](https://github.com/libusb/libusb/releases/download/v$USB_VERSION/libusb-$USB_VERSION.tar.bz2) |"
 "| [Sparkle](https://sparkle-project.org) | $SPARKLE_VERSION | MIT | [$SPARKLE_VERSION](https://github.com/sparkle-project/Sparkle/tree/$SPARKLE_VERSION) |"
-"| [rade_c](https://github.com/freedv/rade_c) (RADE V1 receiver) | ${RADE_C:0:7} | BSD-2-Clause | [${RADE_C:0:7}](https://github.com/freedv/rade_c/tree/$RADE_C) + [patches](scripts/patches) |"
+"| [rade_c](https://github.com/freedv/rade_c) (RADE V1 and V2 receivers) | ${RADE_C:0:7} | BSD-2-Clause | [${RADE_C:0:7}](https://github.com/freedv/rade_c/tree/$RADE_C) + [patches](scripts/patches) |"
 "| [Opus](https://opus-codec.org) (FARGAN vocoder) | ${OPUS:0:7} | BSD-3-Clause | [${OPUS:0:7}](https://github.com/xiph/opus/tree/$OPUS) |"
 "| [freedv-backend](https://github.com/tmiw/freedv-backend) (RADE callsign decoder) | ${FREEDV:0:7} | BSD-2-Clause | [${FREEDV:0:7}](https://github.com/tmiw/freedv-backend/tree/$FREEDV) |"
 )

@@ -120,9 +120,9 @@ final class RadioController {
     /// Sideband for RADE; auto follows the FreeDV convention for the VFO frequency.
     var radeSideband: RADESideband = .auto { didSet { pushConfig() } }
     /// Whether the current RADE reception is in LSB.
-    var radeLSB: Bool { mode == .rade && radeSideband.isLSB(at: vfoFrequency) }
+    var radeLSB: Bool { mode.isRADE && radeSideband.isLSB(at: vfoFrequency) }
     /// The mode as shown to the user, with the sideband for RADE.
-    var modeLabel: String { mode == .rade ? "RADE " + (radeLSB ? "LSB" : "USB") : mode.rawValue }
+    var modeLabel: String { mode.isRADE ? mode.rawValue + " " + (radeLSB ? "LSB" : "USB") : mode.rawValue }
     var deemphasis: Deemphasis = .eu { didSet { pushConfig() } }
     var stereoEnabled = true { didSet { pushConfig() } }
     var rdsEnabled = true { didSet { pushConfig() } }
@@ -768,9 +768,10 @@ final class RadioController {
         // Report the selected VFO when it receives RADE, else the other one.
         // File and demo sources aren't on the air: reporting them would put false reports on the map.
         let onAir = sourceKind != .file && sourceKind != .demo
-        let reportOther = mode != .rade && vfoBEnabled && otherVFO.mode == .rade && otherMeter.inBand
-        reporter.update(active: onAir && (mode == .rade || reportOther),
-                        frequency: reportOther ? otherVFO.frequency : vfoFrequency)
+        let reportOther = !mode.isRADE && vfoBEnabled && otherVFO.mode.isRADE && otherMeter.inBand
+        reporter.update(active: onAir && (mode.isRADE || reportOther),
+                        frequency: reportOther ? otherVFO.frequency : vfoFrequency,
+                        mode: reportOther ? otherVFO.mode : mode)
         let reported = reportOther ? s[selectedVFO.other]?.rade : s[selectedVFO]?.rade
         let heard = reportOther ? heardOther : heardSelected
         if let r = reported, heard != nil || r.sync {
@@ -928,9 +929,11 @@ final class RadioController {
         bookmarks.append(Bookmark(name: spot.dxCall, frequency: spot.frequency, mode: mode, bandwidth: bw, group: "DX"))
     }
 
-    /// The mode to receive a FreeDV station with: RADE, or the sideband when this build lacks the decoder.
+    /// The mode to receive a FreeDV station with: the RADE version it reports, or the sideband when this build
+    /// lacks the decoder.
     private static func demodMode(for station: FreeDVStation) -> DemodMode {
-        DemodMode.available.contains(.rade) ? .rade : DXSpot.sidebandConvention(station.frequency)
+        let rade: DemodMode = station.mode == FreeDVReporter.modeName(for: .radeV2) ? .radeV2 : .rade
+        return DemodMode.available.contains(rade) ? rade : DXSpot.sidebandConvention(station.frequency)
     }
 
     /// Tunes to a FreeDV Reporter station's dial frequency.

@@ -170,7 +170,7 @@ struct ReceiverPanel: View {
                 .labelsHidden()
             }
 
-            if radio.mode == .rade {
+            if radio.mode.isRADE {
                 Row("Sideband") {
                     Picker("Sideband", selection: $radio.radeSideband) {
                         ForEach(RADESideband.allCases) { s in
@@ -184,12 +184,15 @@ struct ReceiverPanel: View {
                 Row("Decoder") {
                     RADEStatusLabel()
                 }
-                Row("Callsign") {
-                    RADECallsignLabel()
+                // Only RADE V1 sends a callsign at the end of an over.
+                if radio.mode == .rade {
+                    Row("Callsign") {
+                        RADECallsignLabel()
+                    }
                 }
             }
 
-            if radio.mode != .wfm && radio.mode != .nfm && radio.mode != .rade {
+            if radio.mode != .wfm && radio.mode != .nfm && !radio.mode.isRADE {
                 Row("AGC") {
                     Picker("AGC", selection: $radio.agcMode) {
                         ForEach(AGCMode.allCases) { Text($0.rawValue).tag($0) }

@@ -1,7 +1,7 @@
 #!/bin/bash
-# Fetches the RADE (FreeDV Radio Autoencoder) V1 receiver from the C port, the parts of Opus it needs (the FARGAN
-# vocoder and the neural-network kernels) and FreeDV's end-of-over callsign decoder into Sources/CRADE/vendor.
-# The sources hold ~45 MB of generated model weights, so they are not checked in. Without them CRADE builds as a
+# Fetches the RADE (FreeDV Radio Autoencoder) V1 and V2 receivers from the C port, the parts of Opus they need (the
+# FARGAN vocoder and the neural-network kernels) and FreeDV's end-of-over callsign decoder into Sources/CRADE/vendor.
+# The sources hold ~85 MB of generated model weights, so they are not checked in. Without them CRADE builds as a
 # stub and RADE mode is hidden.
 #
 # Usage: scripts/fetch-rade.sh [--if-needed]
@@ -57,14 +57,17 @@ tar -xzf "$WORK/$MODEL" -C "$WORK/opus"
 for p in "$ROOT"/scripts/patches/rade_c-*.patch; do
     patch -s -d "$WORK/rade_c" -p1 < "$p"
 done
+# rade_c's own change to Opus: the V2 decoder has conv layers with more inputs than Opus's DRED models.
+patch -s -d "$WORK/opus" -p1 < "$WORK/rade_c/src/opus-nnet.c.diff"
 
 rm -rf "$DEST"
 mkdir -p "$DEST/rade" "$DEST/freedv/pipeline" "$DEST/freedv/util/logging" "$DEST/opus/celt/arm" "$DEST/opus/celt/x86" "$DEST/opus/dnn/arm" "$DEST/opus/include"
 
-# Only the V1 receiver is compiled (kymara_rade.c drives it directly): the encoder and the V2 models would add
-# ~16 MB of weights to the app. All headers come along, since rade_api.h (included by rade_text) pulls them in.
+# Only the V1 and V2 receivers are compiled (kymara_rade.c drives them directly): the encoders would add their
+# weights to the app for nothing. All headers come along, since rade_api.h (included by rade_text) pulls them in.
 R="$WORK/rade_c/src"
-for f in rade_dsp rade_bpf rade_ofdm rade_acq rade_rx rade_dec rade_dec_data; do
+for f in rade_dsp rade_bpf rade_ofdm rade_acq rade_rx rade_dec rade_dec_data \
+         rade_v2_ofdm rade_rx_v2 rade_dec_v2 rade_dec_v2_data rade_sync rade_sync_data; do
     cp "$R/$f.c" "$DEST/rade/"
 done
 find "$R" -maxdepth 1 -name 'rade_*.h' -exec cp {} "$DEST/rade/" \;

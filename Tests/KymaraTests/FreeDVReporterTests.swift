@@ -149,6 +149,26 @@ final class FreeDVReporterTests: XCTestCase {
         XCTAssertEqual(t.emitted.count, 3)
     }
 
+    func testReportsTheRADEVersion() {
+        let r = makeReporter()
+        advance(2)
+        r.update(active: true, frequency: 14_236_000, mode: .radeV2)
+        let t = transports[0]
+        t.onEvent?("connection_successful", [:])
+        XCTAssertEqual(t.emitted[1].1["mode"] as? String, "RADEV2")
+
+        t.emitted = []
+        r.heard(callsign: nil, snr: 5)
+        XCTAssertEqual(t.emitted.last?.1["mode"] as? String, "RADEV2")
+
+        // Switching version is sent at once, without reconnecting.
+        t.emitted = []
+        r.update(active: true, frequency: 14_236_000, mode: .rade)
+        XCTAssertEqual(t.names, ["tx_report"])
+        XCTAssertEqual(t.emitted[0].1["mode"] as? String, "RADEV1")
+        XCTAssertEqual(transports.count, 1)
+    }
+
     func testMessageChangeIsSentWithoutReconnecting() {
         let r = makeReporter()
         advance(2)

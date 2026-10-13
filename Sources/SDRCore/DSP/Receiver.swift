@@ -148,7 +148,7 @@ final class Receiver {
             agc = AGC(sampleRate: ra)
             dcBlock = DCBlocker(cutoff: 40, sampleRate: ra)
             nfmAudio = NFMAudio(sampleRate: ra)
-            rade = c.mode == .rade ? RADEDecoder(rate: ra) : nil
+            rade = c.mode.radeVersion.map { RADEDecoder(rate: ra, version: $0) }
             squelchDelay = DelayLine(delay: c.mode == .nfm ? Int(0.02 * ra) : 0)
             mixer = Mixer()
             cwMixer = Mixer()
@@ -440,7 +440,7 @@ final class Receiver {
                         cwMixer.mix(re: mre, im: mim, count: n, frequency: -g.cwPitch, sampleRate: ra)
                         out.update(from: re, count: n)
                         agc.process(out, count: n, mode: c.agcMode, manualGainDB: c.afGainDB)
-                    case .rade:
+                    case .rade, .radeV2:
                         // The vocoder's output has a fixed level, so no AGC.
                         rade?.process(re: re, im: im, count: n, lsb: c.radeLSB, output: out)
                     case .wfm:

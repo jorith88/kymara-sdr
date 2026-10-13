@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import SDRCore
 
 /// FreeDV Reporter stations, transmitting ones first. Clicking a station tunes to it in RADE.
 struct FreeDVStationsView: View {
@@ -107,7 +108,13 @@ private struct FreeDVStationRow: View {
         return station.isRecentTransmitter(now: Date()) ? FreeDVStationStore.labelColor : Color.gray.opacity(0.5)
     }
 
-    private var modeName: String { station.mode.hasPrefix("RADE") ? "RADE" : station.mode }
+    private var modeName: String {
+        switch station.mode {
+        case FreeDVReporter.modeName(for: .radeV2): return DemodMode.radeV2.rawValue
+        case let m where m.hasPrefix("RADE"): return DemodMode.rade.rawValue
+        case let m: return m
+        }
+    }
 
     var body: some View {
         HStack(spacing: 7) {
