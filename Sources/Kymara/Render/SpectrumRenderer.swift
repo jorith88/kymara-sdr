@@ -14,26 +14,29 @@ private extension SIMD4 where Scalar == Float {
 
 /// Colours for the spectrum display, per theme.
 private struct SpectrumColors {
-    let bgTop, bgBottom, outside, grid, passband, passbandEdge, fillTop, fillBottom, peak, trace, hover, hoverPassband, vfo, centre: SIMD4<Float>
+    let bgTop, bgBottom, outside, grid, passband, passbandEdge, fillTop, fillBottom, peak, trace, hover, hoverPassband, vfo, vfoB, centre: SIMD4<Float>
 
     static let dark = SpectrumColors(
         bgTop: .rgba(0.05, 0.08, 0.15), bgBottom: .rgba(0.01, 0.015, 0.03), outside: .rgba(0, 0, 0, 0.45),
         grid: .rgba(0.5, 0.65, 0.85, 0.26), passband: .rgba(0.75, 0.82, 0.95, 0.13), passbandEdge: .rgba(0.8, 0.88, 1, 0.6),
         fillTop: .rgba(0.2, 0.6, 1, 0.6), fillBottom: .rgba(0.05, 0.25, 0.6, 0.08), peak: .rgba(1, 0.75, 0.25, 0.65),
         trace: .rgba(0.85, 0.95, 1, 1), hover: .rgba(1, 1, 1, 0.35), hoverPassband: .rgba(1, 1, 1, 0.06), vfo: .rgba(1, 0.25, 0.2, 0.95),
-        centre: .rgba(1, 0.8, 0.2, 0.8))
+        vfoB: .rgba(1, 0.6, 0.1, 0.95), centre: .rgba(1, 0.8, 0.2, 0.8))
 
     static let light = SpectrumColors(
         bgTop: .rgba(1, 1, 1), bgBottom: .rgba(0.95, 0.96, 0.98), outside: .rgba(0.45, 0.48, 0.52, 0.22),
         grid: .rgba(0.15, 0.25, 0.4, 0.3), passband: .rgba(0, 0.35, 0.8, 0.09), passbandEdge: .rgba(0, 0.35, 0.75, 0.6),
         fillTop: .rgba(0.05, 0.35, 0.85, 0.8), fillBottom: .rgba(0.05, 0.35, 0.85, 0.2), peak: .rgba(0.9, 0.5, 0, 0.75),
         trace: .rgba(0, 0.12, 0.35, 1), hover: .rgba(0, 0, 0, 0.35), hoverPassband: .rgba(0, 0, 0, 0.05), vfo: .rgba(0.9, 0.15, 0.12, 0.95),
-        centre: .rgba(0.9, 0.55, 0, 0.9))
+        vfoB: .rgba(0.95, 0.5, 0, 0.95), centre: .rgba(0.9, 0.55, 0, 0.9))
+
+    /// VFO line: A red, B orange (matching the spectrum tags).
+    func vfoLine(_ id: VFOID) -> SIMD4<Float> { id == .a ? vfo : vfoB }
 
     /// The VFO that is not selected: the same colours, fainter.
     var otherPassband: SIMD4<Float> { faded(passband, 0.6) }
     var otherPassbandEdge: SIMD4<Float> { faded(passbandEdge, 0.45) }
-    var otherVFO: SIMD4<Float> { faded(vfo, 0.45) }
+    func otherVFOLine(_ id: VFOID) -> SIMD4<Float> { faded(vfoLine(id), 0.45) }
 
     private func faded(_ c: SIMD4<Float>, _ f: Float) -> SIMD4<Float> { SIMD4(c.x, c.y, c.z, c.w * f) }
 }
@@ -164,7 +167,7 @@ final class SpectrumRenderer: NSObject, MTKViewDelegate {
             ])
             let ovx = x(r.otherVFO.frequency)
             let ovw = Float(1.0 / Double(width) * 2 * scale * 0.5)
-            add(.triangleStrip, quad(ovx - ovw, -1, ovx + ovw, 1, colors.otherVFO))
+            add(.triangleStrip, quad(ovx - ovw, -1, ovx + ovw, 1, colors.otherVFOLine(r.selectedVFO.other)))
         }
 
         // Passband.
@@ -228,7 +231,7 @@ final class SpectrumRenderer: NSObject, MTKViewDelegate {
         // VFO line (2 px wide).
         let vx = x(r.vfoFrequency)
         let vw = Float(1.0 / Double(width) * 2 * scale * 0.75)
-        add(.triangleStrip, quad(vx - vw, -1, vx + vw, 1, colors.vfo))
+        add(.triangleStrip, quad(vx - vw, -1, vx + vw, 1, colors.vfoLine(r.selectedVFO)))
 
         // Tuner centre marker.
         let cx = x(r.centerFrequency)

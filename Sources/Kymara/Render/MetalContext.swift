@@ -48,6 +48,7 @@ struct WaterfallUniforms {
     float previewStart;
     float previewEnd;
     float otherVFO;
+    float selectedIsB;
 };
 
 vertex VOut quadVertex(uint vid [[vertex_id]]) {
@@ -124,12 +125,14 @@ fragment float4 waterfallFragment(VOut in [[stage_in]],
         c.rgb = mix(c.rgb, contrast, 0.75);
     }
     // The other VFO's line, 1 pt wide and fainter.
+    // VFO A red, B orange.
+    float3 lineA = float3(1.0, 0.25, 0.2), lineB = float3(1.0, 0.6, 0.1);
     if (u.otherVFO > -1000.0 && abs(xs - u.otherVFO) < px * u.scale * 0.5) {
-        c.rgb = mix(c.rgb, float3(1.0, 0.25, 0.2), 0.5);
+        c.rgb = mix(c.rgb, u.selectedIsB > 0.5 ? lineA : lineB, 0.5);
     }
     // VFO line, 2 pt wide.
     if (abs(xs - u.vfo) < px * u.scale) {
-        c.rgb = mix(c.rgb, float3(1.0, 0.25, 0.2), 0.9);
+        c.rgb = mix(c.rgb, u.selectedIsB > 0.5 ? lineB : lineA, 0.9);
     }
     return c;
 }
@@ -162,6 +165,8 @@ struct WaterfallUniforms {
     var previewEnd: Float = 0
     /// The other VFO (fraction of the band), or -1e6 when it is off or out of band.
     var otherVFO: Float = -1e6
+    /// 1 when VFO B is selected (it picks the line colours).
+    var selectedIsB: Float = 0
 }
 
 @MainActor

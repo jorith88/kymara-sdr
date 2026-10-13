@@ -42,7 +42,7 @@ struct SpectrumOverlay: View {
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)
-                        .background(Theme.red.opacity(0.4), in: RoundedRectangle(cornerRadius: 3))
+                        .background(Theme.vfoMarker(radio.selectedVFO.other).opacity(0.4), in: RoundedRectangle(cornerRadius: 3))
                         .foregroundStyle(.white)
                         .fixedSize()
                         // Below the selected VFO's tag when they would overlap.
@@ -52,7 +52,7 @@ struct SpectrumOverlay: View {
                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
                     .padding(.horizontal, 4)
                     .padding(.vertical, 1)
-                    .background(Theme.red.opacity(0.85), in: RoundedRectangle(cornerRadius: 3))
+                    .background(Theme.vfoMarker(radio.selectedVFO).opacity(0.85), in: RoundedRectangle(cornerRadius: 3))
                     .foregroundStyle(.white)
                     .fixedSize()
                     .position(x: min(max(vx, 50), w - 50), y: 10)

@@ -85,6 +85,8 @@ enum Theme {
 
     /// Identifies a VFO in the LCDs: A in the accent colour, B in orange.
     static func vfo(_ id: VFOID) -> Color { id == .a ? accent : amber }
+    /// A VFO's line and tag on the spectrum: A red, B orange.
+    static func vfoMarker(_ id: VFOID) -> Color { id == .a ? red : amber }
 }
 
 /// Collapsible sidebar section in the SDR Console style.
