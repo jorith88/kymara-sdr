@@ -6,6 +6,36 @@
         <link>https://github.com/jorith88/kymara-sdr</link>
         <!-- items -->
         <item>
+            <title>Kymara SDR 1.0.0-beta.10</title>
+            <pubDate>Tue, 13 Oct 2026 16:28:26 +0000</pubDate>
+            <sparkle:version>10</sparkle:version>
+            <sparkle:shortVersionString>1.0.0-beta.10</sparkle:shortVersionString>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>VFO B: a second receiver</h2>
+<p>Listen to two signals in the captured band at the same time. Turn VFO B on in the Receiver section, the toolbar or<br>
+<strong>Radio → VFO B</strong> (⇧⌘B).</p>
+<ul>
+<li>VFO B is a full second receiver with its own mode, bandwidth, squelch, AGC, RDS, RADE (with callsign) and S-meter.</li>
+<li>Each VFO has its own volume, mute and output (both channels, left or right), so you can put A in one ear and B in<br>
+the other. Audio recordings capture the mix.</li>
+<li>The sidebar, ribbon, S-meter, keyboard tuning, favourites, DX spots and band switching act on the selected VFO.<br>
+Select a VFO by clicking its passband on the spectrum or its display in the ribbon, or with <strong>Radio → Control VFO A/B</strong> (⌘B).<br>
+<strong>Swap VFOs</strong> and <strong>Copy VFO A to B</strong> (or B to A) are in the Radio menu.</li>
+<li>VFO B has a compact display next to the main one, in orange; on the spectrum and waterfall its tag and line are<br>
+orange too.</li>
+<li>When the tuner moves so that a VFO falls outside the band, that VFO goes silent and keeps its frequency; it plays<br>
+again once the band covers it.</li>
+</ul>
+<h2>Other changes</h2>
+<ul>
+<li>DX spots and FreeDV stations have a <strong>Look Up on QRZ.com</strong> item in their context menu.</li>
+<li>Your own callsign no longer appears in the FreeDV station list.</li>
+<li>The record buttons are no longer in the ribbon; recording is in the Recording section of the sidebar.</li>
+</ul>]]></description>
+            <enclosure url="https://github.com/jorith88/kymara-sdr/releases/download/v1.0.0-beta.10/Kymara-1.0.0-beta.10.dmg" sparkle:edSignature="w4NPakBhZGjPF15hlAAtP5Jc0hTC7zOINlKs4Nwu6lF670gPo2I+SZVH9q0ocSJTJOuvI1EKWr8IuX7SzxOJAg==" length="12095490" type="application/octet-stream"/>
+        </item>
+        <item>
             <title>Kymara SDR 1.0.0-beta.9</title>
             <pubDate>Mon, 12 Oct 2026 14:25:41 +0000</pubDate>
             <sparkle:version>9</sparkle:version>
