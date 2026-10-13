@@ -116,6 +116,16 @@ struct KymaraApp: App {
                     .keyboardShortcut(.downArrow, modifiers: [.command, .option])
                     .disabled(AmateurBand.below(radio.vfoFrequency) == nil)
                 Divider()
+                Toggle("VFO B", isOn: Binding(get: { radio.vfoBEnabled }, set: { radio.setVFOB(enabled: $0) }))
+                    .keyboardShortcut("b", modifiers: [.command, .shift])
+                Button("Control VFO \(radio.selectedVFO.other.rawValue)") { radio.toggleSelectedVFO() }
+                    .keyboardShortcut("b")
+                    .disabled(!radio.vfoBEnabled)
+                Button("Swap VFOs") { radio.swapVFOs() }
+                    .disabled(!radio.vfoBEnabled)
+                Button("Copy VFO \(radio.selectedVFO.rawValue) to \(radio.selectedVFO.other.rawValue)") { radio.copyToOtherVFO() }
+                    .disabled(!radio.vfoBEnabled)
+                Divider()
                 Toggle("Mute", isOn: $radio.muted)
                     .keyboardShortcut("m", modifiers: [.command, .shift])
                 Toggle("Auto Notch", isOn: $radio.autoNotch)

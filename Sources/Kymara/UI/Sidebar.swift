@@ -135,6 +135,22 @@ struct ReceiverPanel: View {
     var body: some View {
         @Bindable var radio = radio
         Panel("Receiver", systemImage: "dial.medium") {
+            Row("VFO B") {
+                Toggle("VFO B", isOn: Binding(get: { radio.vfoBEnabled }, set: { radio.setVFOB(enabled: $0) }))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .help("A second receiver in the same band (⇧⌘B)")
+            }
+            if radio.vfoBEnabled {
+                Row("Controls") {
+                    Picker("Controlled VFO", selection: Binding(get: { radio.selectedVFO }, set: { radio.selectVFO($0) })) {
+                        ForEach(VFOID.allCases) { Text("VFO \($0.rawValue)").tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .help("The VFO these settings apply to (⌘B)")
+                }
+            }
             Row("Mode") {
                 Picker("Mode", selection: $radio.mode) {
                     ForEach(DemodMode.available) { Text($0.rawValue).tag($0) }
@@ -246,6 +262,14 @@ struct ReceiverPanel: View {
             ValueSlider(label: "Level", value: $radio.squelchLevel, range: -120...0, format: { String(format: "%.0f dBFS", $0) })
                 .disabled(!radio.squelchEnabled || radio.autoSquelchActive)
             ValueSlider(label: "Volume", value: $radio.volume, range: 0...1, format: { String(format: "%.0f %%", $0 * 100) })
+            Row("Output") {
+                Picker("Output", selection: $radio.output) {
+                    ForEach(AudioRoute.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .help("Which speaker this VFO plays on")
+            }
         }
     }
 }
@@ -590,6 +614,14 @@ struct RecordingPanel: View {
             HStack {
                 Button(radio.recordingAudio ? "Stop audio" : "Record audio") { radio.toggleAudioRecording() }
                 Button(radio.recordingIQ ? "Stop I/Q" : "Record I/Q") { radio.toggleIQRecording() }
+                if let start = radio.recordingStart, radio.recordingAudio || radio.recordingIQ {
+                    TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                        Text(Duration.seconds(ctx.date.timeIntervalSince(start)).formatted(.time(pattern: .minuteSecond)))
+                            .font(.caption.monospaced())
+                            .foregroundStyle(Theme.red)
+                            .accessibilityLabel("Recording time")
+                    }
+                }
             }
             .controlSize(.small)
             Text("Audio: 16-bit stereo WAV. I/Q: 8-bit WAV (playable as an I/Q file source).")

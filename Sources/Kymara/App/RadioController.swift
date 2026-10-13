@@ -67,10 +67,10 @@ final class RadioController {
 
     // MARK: Tuning
     private(set) var vfoFrequency: Double = 100_000_000 {
-        didSet { if vfoFrequency != oldValue { clearRDS() } }
+        didSet { if vfoFrequency != oldValue && !swapping { clearRDS() } }
     }
     private(set) var centerFrequency: Double = 99_700_000
-    var mode: DemodMode = .wfm { didSet { if mode != oldValue { modeChanged(from: oldValue) } } }
+    var mode: DemodMode = .wfm { didSet { if mode != oldValue && !swapping { modeChanged(from: oldValue) } } }
     var bandwidth: Double = 180_000 { didSet { bandwidths[mode.rawValue] = bandwidth; pushConfig() } }
     var step: Double = 100_000 { didSet { steps[mode.rawValue] = step; scheduleSave() } }
     @ObservationIgnored private var bandwidths: [String: Double] = [:]
@@ -78,6 +78,17 @@ final class RadioController {
     /// Where the radio was last tuned on each amateur band, by band name.
     @ObservationIgnored private var bandStack: [String: BandMemory] = [:]
     @ObservationIgnored private var bandStackPaused = false
+
+    // MARK: VFOs
+    /// Which VFO the controls act on; the tuning and demodulation properties above and below belong to it.
+    private(set) var selectedVFO: VFOID = .a
+    /// VFO B: a second receiver in the captured band.
+    private(set) var vfoBEnabled = false
+    /// The VFO that is not selected (B while A is selected, also while B is off).
+    private(set) var otherVFO = VFOState()
+    private(set) var otherMeter = VFOMeter()
+    /// Set while a VFO's state is loaded into the properties, to keep their side effects out.
+    @ObservationIgnored private var swapping = false
 
     // MARK: RF
     var sampleRate: Double = 2_400_000 { didSet { if sampleRate != oldValue { sampleRateChanged() } } }
@@ -95,6 +106,7 @@ final class RadioController {
     // MARK: Audio / demodulation
     var volume: Double = 0.5 { didSet { pushConfig() } }
     var muted = false { didSet { pushConfig() } }
+    var output: AudioRoute = .both { didSet { pushConfig() } }
     var squelchEnabled = false { didSet { pushConfig() } }
     var squelchLevel: Double = -50 { didSet { pushConfig() } }
     /// FM modes only; other modes keep using the level.
@@ -200,7 +212,8 @@ final class RadioController {
     /// passband (a click there drags it instead of tuning) and while a mouse button is held.
     var hoverPassband: (lo: Double, hi: Double)? {
         guard let hover, NSEvent.pressedMouseButtons == 0,
-              hover.frequency < filterStart || hover.frequency > filterEnd else { return nil }
+              hover.frequency < filterStart || hover.frequency > filterEnd,
+              !otherInBand || hover.frequency < otherFilterStart || hover.frequency > otherFilterEnd else { return nil }
         let f = snapped(hover.frequency)
         return (f + filterEdges.lo, f + filterEdges.hi)
     }
@@ -359,6 +372,7 @@ final class RadioController {
         clearRDS()
         sourceName = "Not running"
         signalDB = -150
+        otherMeter = VFOMeter()
     }
 
     private func stopSource() {
@@ -464,7 +478,7 @@ final class RadioController {
     }
 
     private func clearRDS() {
-        engine.resetRDS()
+        engine.resetRDS(vfo: selectedVFO)
         if rds != RDSInfo() { rds = RDSInfo() }
         // The callsign belongs to the station just left, as RDS does.
         if radeCallsign != nil { radeCallsign = nil }
@@ -478,6 +492,136 @@ final class RadioController {
         bandwidth = min(bw, maxBandwidth)
         step = steps[mode.rawValue] ?? mode.defaultStep
         pushConfig()
+    }
+
+    // MARK: - VFOs
+
+    /// The selected VFO's settings.
+    private func captureSelected() -> VFOState {
+        var v = VFOState()
+        v.frequency = vfoFrequency
+        v.mode = mode
+        v.bandwidth = bandwidth
+        v.step = step
+        v.bandwidths = bandwidths
+        v.bandwidths[mode.rawValue] = bandwidth
+        v.steps = steps
+        v.steps[mode.rawValue] = step
+        v.volume = volume
+        v.muted = muted
+        v.output = output
+        v.squelchEnabled = squelchEnabled
+        v.squelchLevel = squelchLevel
+        v.squelchAuto = squelchAuto
+        v.agcMode = agcMode
+        v.afGain = afGain
+        v.autoNotch = autoNotch
+        v.radeSideband = radeSideband
+        v.stereo = stereoEnabled
+        v.rds = rdsEnabled
+        return v
+    }
+
+    /// Loads a VFO's settings into the properties, without the side effects of changing them one by one.
+    private func applySelected(_ v: VFOState) {
+        swapping = true
+        defer { swapping = false }
+        bandwidths = v.bandwidths
+        steps = v.steps
+        // A mode this build lacks (RADE without its sources) falls back to its sideband.
+        mode = DemodMode.available.contains(v.mode) ? v.mode : .usb
+        bandwidth = min(v.bandwidth, maxBandwidth)
+        step = v.step
+        vfoFrequency = v.frequency
+        volume = v.volume
+        muted = v.muted
+        output = v.output
+        squelchEnabled = v.squelchEnabled
+        squelchLevel = v.squelchLevel
+        squelchAuto = v.squelchAuto
+        agcMode = v.agcMode
+        afGain = v.afGain
+        autoNotch = v.autoNotch
+        radeSideband = v.radeSideband
+        stereoEnabled = v.stereo
+        rdsEnabled = v.rds
+    }
+
+    func isInBand(_ frequency: Double) -> Bool {
+        abs(frequency - centerFrequency) <= sampleRate * DSPEngine.usableFraction
+    }
+
+    /// The other VFO is on and inside the captured band.
+    var otherInBand: Bool { vfoBEnabled && isInBand(otherVFO.frequency) }
+    var otherFilterStart: Double { otherVFO.frequency + otherVFO.filterEdges.lo }
+    var otherFilterEnd: Double { otherVFO.frequency + otherVFO.filterEdges.hi }
+
+    /// Makes `vfo` the one the controls act on. A VFO outside the band brings the band to it.
+    func selectVFO(_ vfo: VFOID) {
+        guard vfo != selectedVFO, vfoBEnabled else { return }
+        let state = captureSelected(), meter = selectedMeter
+        applySelected(otherVFO)
+        selectedMeter = otherMeter
+        otherVFO = state
+        otherMeter = meter
+        selectedVFO = vfo
+        bringSelectedIntoBand()
+    }
+
+    func toggleSelectedVFO() {
+        selectVFO(selectedVFO.other)
+    }
+
+    /// Switches VFO B on (selecting it) or off. B comes back where it was if that is in the band, else on A.
+    func setVFOB(enabled: Bool) {
+        guard enabled != vfoBEnabled else { return }
+        if enabled {
+            if !isInBand(otherVFO.frequency) { otherVFO = captureSelected() }
+            otherVFO.muted = false
+            otherMeter = VFOMeter()
+            engine.resetRDS(vfo: .b)
+            vfoBEnabled = true
+            selectVFO(.b)
+        } else {
+            selectVFO(.a)
+            vfoBEnabled = false
+            otherMeter = VFOMeter()
+        }
+        pushConfig()
+    }
+
+    /// Exchanges the settings of the two VFOs; the selection stays.
+    func swapVFOs() {
+        guard vfoBEnabled else { return }
+        let state = captureSelected()
+        applySelected(otherVFO)
+        otherVFO = state
+        clearRDS()
+        clearOtherRDS()
+        bringSelectedIntoBand()
+    }
+
+    /// Puts the other VFO on the selected one's frequency and settings.
+    func copyToOtherVFO() {
+        guard vfoBEnabled else { return }
+        otherVFO = captureSelected()
+        clearOtherRDS()
+        pushConfig()
+    }
+
+    private func clearOtherRDS() {
+        engine.resetRDS(vfo: selectedVFO.other)
+        otherMeter.rds = RDSInfo()
+        otherMeter.radeCallsign = nil
+    }
+
+    private func bringSelectedIntoBand() {
+        if !isInBand(vfoFrequency) {
+            tune(to: vfoFrequency)
+        } else {
+            ensureVFOVisible()
+            pushConfig()
+        }
     }
 
     // MARK: - View (zoom / pan)
@@ -562,24 +706,19 @@ final class RadioController {
     // MARK: - Config / meter
 
     private func pushConfig() {
+        guard !swapping else { return }
         var c = DSPConfig()
         c.sampleRate = sampleRate
-        c.vfoOffset = vfoFrequency - centerFrequency
-        c.mode = mode
-        c.bandwidth = bandwidth
-        c.squelchEnabled = squelchEnabled
-        c.squelchLevel = Float(squelchLevel)
-        c.squelchAuto = squelchAuto
-        c.agcMode = agcMode
-        c.afGainDB = Float(afGain)
-        c.autoNotch = autoNotch
-        c.radeLSB = radeLSB
-        // Perceptual volume curve.
-        c.volume = Float(volume * volume)
-        c.muted = muted
+        let selected = receiverConfig(captureSelected())
+        let other = receiverConfig(otherVFO)
+        if selectedVFO == .a {
+            c.vfoA = selected
+            c.vfoB = vfoBEnabled ? other : nil
+        } else {
+            c.vfoA = other
+            c.vfoB = selected
+        }
         c.deemphasis = deemphasis.tau
-        c.stereo = stereoEnabled
-        c.rds = rdsEnabled
         c.cwPitch = cwPitch
         c.dcCorrection = dcCorrection
         c.swapIQ = swapIQ
@@ -592,46 +731,106 @@ final class RadioController {
         scheduleSave()
     }
 
+    private func receiverConfig(_ v: VFOState) -> ReceiverConfig {
+        var r = ReceiverConfig()
+        r.vfoOffset = v.frequency - centerFrequency
+        r.mode = v.mode
+        r.bandwidth = v.bandwidth
+        r.squelchEnabled = v.squelchEnabled
+        r.squelchLevel = Float(v.squelchLevel)
+        r.squelchAuto = v.squelchAuto
+        r.agcMode = v.agcMode
+        r.afGainDB = Float(v.afGain)
+        r.autoNotch = v.autoNotch
+        r.radeLSB = v.radeLSB
+        // Perceptual volume curve.
+        r.volume = Float(v.volume * v.volume)
+        r.muted = v.muted
+        r.output = v.output
+        r.stereo = v.stereo
+        r.rds = v.rds
+        return r
+    }
+
     private func updateMeter() {
         guard isRunning else { return }
         let s = engine.status
+        meterTick &+= 1
+        var selected = selectedMeter
+        let heardSelected = Self.update(&selected, from: s[selectedVFO] ?? ReceiverStatus(), tick: meterTick)
+        selectedMeter = selected
+        var heardOther: String?
+        if vfoBEnabled, let o = s[selectedVFO.other] {
+            var other = otherMeter
+            heardOther = Self.update(&other, from: o, tick: meterTick)
+            if other != otherMeter { otherMeter = other }
+        }
+        // Report the selected VFO when it receives RADE, else the other one.
+        // File and demo sources aren't on the air: reporting them would put false reports on the map.
+        let onAir = sourceKind != .file && sourceKind != .demo
+        let reportOther = mode != .rade && vfoBEnabled && otherVFO.mode == .rade && otherMeter.inBand
+        reporter.update(active: onAir && (mode == .rade || reportOther),
+                        frequency: reportOther ? otherVFO.frequency : vfoFrequency)
+        let reported = reportOther ? s[selectedVFO.other]?.rade : s[selectedVFO]?.rade
+        let heard = reportOther ? heardOther : heardSelected
+        if let r = reported, heard != nil || r.sync {
+            reporter.heard(callsign: heard, snr: r.snrDB)
+        }
+        let isOverloaded = s.overload || (source?.hardwareOverload ?? false)
+        if overload != isOverloaded { overload = isOverloaded }
+        sdrplayGainDB = (source as? SDRplaySource)?.systemGainDB
+        if meterTick % 15 == 0 {
+            audioLatency = engine.audioRing.latency
+            measuredRate = s.samplesPerSecond
+        }
+    }
+
+    /// Moves a VFO's meter towards the engine's status. Returns a RADE callsign decoded since the last call.
+    private static func update(_ m: inout VFOMeter, from s: ReceiverStatus, tick: Int) -> String? {
         let level = Double(s.levelDB)
         // Fast attack, slow release, like an analogue meter.
-        signalDB = level > signalDB ? signalDB + (level - signalDB) * 0.6 : signalDB + (level - signalDB) * 0.12
-        signalPeakDB = max(signalPeakDB - 0.25, signalDB)
-        if squelchOpen != s.squelchOpen { squelchOpen = s.squelchOpen }
-        let snr = s.snrDB.map { Double($0.rounded()) }
-        if snrDB != snr { snrDB = snr }
-        if stereoLocked != s.stereoLocked { stereoLocked = s.stereoLocked }
-        let radeStatus = s.rade.map { r in
+        m.signalDB = level > m.signalDB ? m.signalDB + (level - m.signalDB) * 0.6 : m.signalDB + (level - m.signalDB) * 0.12
+        m.signalPeakDB = max(m.signalPeakDB - 0.25, m.signalDB)
+        m.squelchOpen = s.squelchOpen
+        m.snrDB = s.snrDB.map { Double($0.rounded()) }
+        m.stereoLocked = s.stereoLocked
+        m.inBand = s.inBand
+        m.rade = s.rade.map { r in
             var r = r
             r.snrDB = r.snrDB.rounded()
             r.frequencyOffset = r.frequencyOffset.rounded()
             return r
         }
-        if rade != radeStatus { rade = radeStatus }
         // The count restarts at 0 when the engine builds a new decoder, so any change to a non-zero count is news.
-        var heardCallsign: String?
-        if let s = s.rade, s.callsignCount != radeCallsignCount {
-            if s.callsignCount > 0, let call = s.callsign, !call.isEmpty {
-                radeCallsign = call
-                heardCallsign = call
+        var heard: String?
+        if let r = s.rade, r.callsignCount != m.radeCallsignCount {
+            if r.callsignCount > 0, let call = r.callsign, !call.isEmpty {
+                m.radeCallsign = call
+                heard = call
             }
-            radeCallsignCount = s.callsignCount
+            m.radeCallsignCount = r.callsignCount
         }
-        // File and demo sources aren't on the air: reporting them would put false reports on the map.
-        reporter.update(active: mode == .rade && sourceKind != .file && sourceKind != .demo, frequency: vfoFrequency)
-        if let r = s.rade, heardCallsign != nil || r.sync {
-            reporter.heard(callsign: heardCallsign, snr: r.snrDB)
+        if tick % 5 == 0 { m.rds = s.rds }
+        return heard
+    }
+
+    /// The selected VFO's meter, kept in separate properties so views observe only what they show.
+    private var selectedMeter: VFOMeter {
+        get {
+            VFOMeter(signalDB: signalDB, signalPeakDB: signalPeakDB, squelchOpen: squelchOpen, snrDB: snrDB,
+                     stereoLocked: stereoLocked, rds: rds, rade: rade, radeCallsign: radeCallsign,
+                     radeCallsignCount: radeCallsignCount)
         }
-        let isOverloaded = s.overload || (source?.hardwareOverload ?? false)
-        if overload != isOverloaded { overload = isOverloaded }
-        sdrplayGainDB = (source as? SDRplaySource)?.systemGainDB
-        meterTick &+= 1
-        if meterTick % 5 == 0, s.rds != rds { rds = s.rds }
-        if meterTick % 15 == 0 {
-            audioLatency = engine.audioRing.latency
-            measuredRate = s.samplesPerSecond
+        set {
+            signalDB = newValue.signalDB
+            signalPeakDB = newValue.signalPeakDB
+            if squelchOpen != newValue.squelchOpen { squelchOpen = newValue.squelchOpen }
+            if snrDB != newValue.snrDB { snrDB = newValue.snrDB }
+            if stereoLocked != newValue.stereoLocked { stereoLocked = newValue.stereoLocked }
+            if rds != newValue.rds { rds = newValue.rds }
+            if rade != newValue.rade { rade = newValue.rade }
+            if radeCallsign != newValue.radeCallsign { radeCallsign = newValue.radeCallsign }
+            radeCallsignCount = newValue.radeCallsignCount
         }
     }
 
@@ -889,7 +1088,12 @@ final class RadioController {
         theme = s.theme ?? .system
         theme.apply()
         bookmarks = store.loadBookmarks(legacy: s.bookmarks) ?? Self.defaultBookmarks
+        output = s.output
         if abs(vfoFrequency - centerFrequency) > sampleRate * 0.48 { centerFrequency = vfoFrequency - sampleRate / 8 }
+        otherVFO = s.vfoB ?? captureSelected()
+        if !DemodMode.available.contains(otherVFO.mode) { otherVFO.mode = .usb }
+        vfoBEnabled = s.vfoBEnabled
+        if vfoBEnabled && s.selectedVFO == .b { selectVFO(.b) }
     }
 
     private func currentSettings() -> RadioSettings {
@@ -899,15 +1103,15 @@ final class RadioController {
         s.tcpPort = tcpPort
         s.sdrplaySerial = selectedSDRplaySerial
         s.sdrplay = sdrplay
-        s.vfo = vfoFrequency
+        // The flat fields are VFO A's.
+        let a = selectedVFO == .a ? captureSelected() : otherVFO
+        var b = selectedVFO == .a ? otherVFO : captureSelected()
+        b.muted = false
+        s.vfo = a.frequency
         s.center = centerFrequency
-        s.mode = mode
-        var bw = bandwidths
-        bw[mode.rawValue] = bandwidth
-        s.bandwidths = bw
-        var st = steps
-        st[mode.rawValue] = step
-        s.steps = st
+        s.mode = a.mode
+        s.bandwidths = a.bandwidths
+        s.steps = a.steps
         s.bandStack = bandStack
         s.sampleRate = sampleRate
         s.gainAuto = gainAuto
@@ -917,17 +1121,21 @@ final class RadioController {
         s.directSampling = directSampling
         s.biasTee = biasTee
         s.offsetTuning = offsetTuning
-        s.volume = volume
-        s.squelchEnabled = squelchEnabled
-        s.squelchLevel = squelchLevel
-        s.squelchAuto = squelchAuto
-        s.agcMode = agcMode
-        s.autoNotch = autoNotch
-        s.radeSideband = radeSideband
-        s.afGain = afGain
+        s.volume = a.volume
+        s.squelchEnabled = a.squelchEnabled
+        s.squelchLevel = a.squelchLevel
+        s.squelchAuto = a.squelchAuto
+        s.agcMode = a.agcMode
+        s.autoNotch = a.autoNotch
+        s.radeSideband = a.radeSideband
+        s.afGain = a.afGain
         s.deemphasis = deemphasis
-        s.stereo = stereoEnabled
-        s.rds = rdsEnabled
+        s.stereo = a.stereo
+        s.rds = a.rds
+        s.output = a.output
+        s.vfoB = b
+        s.vfoBEnabled = vfoBEnabled
+        s.selectedVFO = selectedVFO
         s.cwPitch = cwPitch
         s.dcCorrection = dcCorrection
         s.swapIQ = swapIQ

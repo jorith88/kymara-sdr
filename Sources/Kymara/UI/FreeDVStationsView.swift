@@ -70,10 +70,7 @@ struct FreeDVStationsView: View {
                             Button("Tune") { radio.tune(to: station) }
                             Button("Add to Favourites") { radio.addBookmark(station) }
                             Divider()
-                            Button("Copy Callsign") {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(station.callsign.uppercased(), forType: .string)
-                            }
+                            CallsignMenuItems(callsign: station.callsign.uppercased())
                         }
                 }
             }

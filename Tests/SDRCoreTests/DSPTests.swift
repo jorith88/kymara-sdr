@@ -178,10 +178,10 @@ final class DSPTests: XCTestCase {
         let engine = DSPEngine()
         var c = DSPConfig()
         c.sampleRate = fs
-        c.vfoOffset = offset
-        c.mode = .wfm
-        c.bandwidth = 180_000
-        c.volume = 1
+        c.vfoA.vfoOffset = offset
+        c.vfoA.mode = .wfm
+        c.vfoA.bandwidth = 180_000
+        c.vfoA.volume = 1
         c.deemphasis = 0
         engine.config = c
         let (l, r) = runEngine(engine, iq: iq)
@@ -190,7 +190,7 @@ final class DSPTests: XCTestCase {
         XCTAssertEqual(Double(rms(tail)), 0.8 * 0.7071, accuracy: 0.08)
         XCTAssertEqual(zeroCrossingFrequency(tail, sampleRate: 48_000), 1_000, accuracy: 20)
         XCTAssertEqual(rms(tail), rms(r[(r.count / 2)...]), accuracy: 0.01, "mono signal: L == R")
-        XCTAssertGreaterThan(engine.status.levelDB, -15)
+        XCTAssertGreaterThan(engine.status.vfoA.levelDB, -15)
     }
 
     func testEngineWFMEndToEnd16Bit() {
@@ -206,10 +206,10 @@ final class DSPTests: XCTestCase {
         let engine = DSPEngine()
         var c = DSPConfig()
         c.sampleRate = fs
-        c.vfoOffset = offset
-        c.mode = .wfm
-        c.bandwidth = 180_000
-        c.volume = 1
+        c.vfoA.vfoOffset = offset
+        c.vfoA.mode = .wfm
+        c.vfoA.bandwidth = 180_000
+        c.vfoA.volume = 1
         c.deemphasis = 0
         engine.config = c
         let (l, _) = runEngine(engine, iq: iq)
@@ -217,7 +217,7 @@ final class DSPTests: XCTestCase {
         let tail = l[(l.count / 2)...]
         XCTAssertEqual(Double(rms(tail)), 0.8 * 0.7071, accuracy: 0.08)
         XCTAssertEqual(zeroCrossingFrequency(tail, sampleRate: DSPEngine.rates(for: fs).audioRate), 1_000, accuracy: 20)
-        XCTAssertEqual(Double(engine.status.levelDB), -40, accuracy: 4)
+        XCTAssertEqual(Double(engine.status.vfoA.levelDB), -40, accuracy: 4)
     }
 
     func testEngineUSBProducesAudioTone() {
@@ -231,10 +231,10 @@ final class DSPTests: XCTestCase {
         let engine = DSPEngine()
         var c = DSPConfig()
         c.sampleRate = fs
-        c.vfoOffset = vfo
-        c.mode = .usb
-        c.bandwidth = 2_700
-        c.volume = 1
+        c.vfoA.vfoOffset = vfo
+        c.vfoA.mode = .usb
+        c.vfoA.bandwidth = 2_700
+        c.vfoA.volume = 1
         engine.config = c
         let (l, _) = runEngine(engine, iq: iq)
         let tail = l[(l.count / 2)...]
@@ -243,12 +243,89 @@ final class DSPTests: XCTestCase {
 
         // The same tone in LSB mode falls outside the passband.
         let engine2 = DSPEngine()
-        c.mode = .lsb
-        c.agcMode = .off
-        c.afGainDB = 0
+        c.vfoA.mode = .lsb
+        c.vfoA.agcMode = .off
+        c.vfoA.afGainDB = 0
         engine2.config = c
         let (l2, _) = runEngine(engine2, iq: iq)
         XCTAssertLessThan(rms(l2[(l2.count / 2)...]), rms(tail) * 0.1)
+    }
+
+    /// Two tones, 1.2 kHz above -200 kHz and 700 Hz above +300 kHz.
+    private func twoToneIQ(fs: Double) -> [UInt8] {
+        makeIQ(sampleRate: fs, seconds: 1.0) { _, t in
+            let p1 = 2 * .pi * (-200_000 + 1_200) * t, p2 = 2 * .pi * (300_000 + 700) * t
+            return (Float(0.05 * (cos(p1) + cos(p2))), Float(0.05 * (sin(p1) + sin(p2))))
+        }
+    }
+
+    private func usb(offset: Double, output: AudioRoute) -> ReceiverConfig {
+        var r = ReceiverConfig()
+        r.vfoOffset = offset
+        r.mode = .usb
+        r.bandwidth = 2_700
+        r.volume = 1
+        r.output = output
+        return r
+    }
+
+    func testTwoVFOsRoutedToSeparateChannels() {
+        let fs = 2_400_000.0
+        let engine = DSPEngine()
+        var c = DSPConfig()
+        c.sampleRate = fs
+        c.vfoA = usb(offset: -200_000, output: .left)
+        c.vfoB = usb(offset: 300_000, output: .right)
+        engine.config = c
+        let (l, r) = runEngine(engine, iq: twoToneIQ(fs: fs))
+        let tl = l[(l.count / 2)...], tr = r[(r.count / 2)...]
+        XCTAssertEqual(zeroCrossingFrequency(tl, sampleRate: 48_000), 1_200, accuracy: 20)
+        XCTAssertEqual(zeroCrossingFrequency(tr, sampleRate: 48_000), 700, accuracy: 20)
+        // No cross-talk: A's tone is not in the right channel, nor B's in the left.
+        XCTAssertLessThan(tonePower(tr, frequency: 1_200, sampleRate: 48_000),
+                          tonePower(tl, frequency: 1_200, sampleRate: 48_000) * 1e-4)
+        XCTAssertLessThan(tonePower(tl, frequency: 700, sampleRate: 48_000),
+                          tonePower(tr, frequency: 700, sampleRate: 48_000) * 1e-4)
+        XCTAssertTrue(engine.status.vfoB?.inBand ?? false)
+        XCTAssertGreaterThan(engine.status.vfoB?.levelDB ?? -150, -60)
+    }
+
+    func testMutedVFOIsLeftOutOfTheMix() {
+        let fs = 2_400_000.0
+        let engine = DSPEngine()
+        var c = DSPConfig()
+        c.sampleRate = fs
+        c.vfoA = usb(offset: -200_000, output: .both)
+        c.vfoB = usb(offset: 300_000, output: .both)
+        c.vfoB?.muted = true
+        engine.config = c
+        let (l, _) = runEngine(engine, iq: twoToneIQ(fs: fs))
+        let tail = l[(l.count / 2)...]
+        XCTAssertLessThan(tonePower(tail, frequency: 700, sampleRate: 48_000),
+                          tonePower(tail, frequency: 1_200, sampleRate: 48_000) * 1e-4)
+    }
+
+    func testVFOOutOfBandIsSilentAndLeavesTheOtherAlone() {
+        let fs = 2_400_000.0
+        let engine = DSPEngine()
+        var c = DSPConfig()
+        c.sampleRate = fs
+        c.vfoA = usb(offset: -200_000, output: .both)
+        c.vfoB = usb(offset: 1_500_000, output: .both)
+        engine.config = c
+        let (l, _) = runEngine(engine, iq: twoToneIQ(fs: fs))
+        let tail = l[(l.count / 2)...]
+        XCTAssertGreaterThan(rms(tail), 0.1)
+        XCTAssertEqual(zeroCrossingFrequency(tail, sampleRate: 48_000), 1_200, accuracy: 20)
+        XCTAssertEqual(engine.status.vfoB?.inBand, false)
+
+        // Both out of band: the output keeps running, silent.
+        let engine2 = DSPEngine()
+        c.vfoA.vfoOffset = -1_500_000
+        engine2.config = c
+        let (l2, _) = runEngine(engine2, iq: twoToneIQ(fs: fs))
+        XCTAssertGreaterThan(l2.count, 30_000)
+        XCTAssertEqual(rms(l2[...]), 0)
     }
 
     /// Power of the component at `frequency`, by correlation.
@@ -312,13 +389,13 @@ final class DSPTests: XCTestCase {
             let engine = DSPEngine()
             var c = DSPConfig()
             c.sampleRate = fs
-            c.vfoOffset = vfo
-            c.mode = .usb
-            c.bandwidth = 2_700
-            c.agcMode = .off
-            c.afGainDB = 0
-            c.volume = 1
-            c.autoNotch = notch
+            c.vfoA.vfoOffset = vfo
+            c.vfoA.mode = .usb
+            c.vfoA.bandwidth = 2_700
+            c.vfoA.agcMode = .off
+            c.vfoA.afGainDB = 0
+            c.vfoA.volume = 1
+            c.vfoA.autoNotch = notch
             engine.config = c
             let (l, _) = runEngine(engine, iq: iq)
             // The notch starts after one second of averaging.
@@ -338,10 +415,10 @@ final class DSPTests: XCTestCase {
         let engine = DSPEngine()
         var c = DSPConfig()
         c.sampleRate = fs
-        c.vfoOffset = vfo
-        c.mode = .am
-        c.bandwidth = 8_000
-        c.volume = 1
+        c.vfoA.vfoOffset = vfo
+        c.vfoA.mode = .am
+        c.vfoA.bandwidth = 8_000
+        c.vfoA.volume = 1
         engine.config = c
         let (l, _) = runEngine(engine, iq: iq)
         let rate = DSPEngine.rates(for: fs).audioRate
@@ -369,16 +446,16 @@ final class DSPTests: XCTestCase {
         let engine = DSPEngine()
         var c = DSPConfig()
         c.sampleRate = fs
-        c.mode = .nfm
-        c.bandwidth = 12_500
-        c.vfoOffset = 100_000
-        c.volume = 1
-        c.squelchEnabled = true
-        c.squelchLevel = -20
+        c.vfoA.mode = .nfm
+        c.vfoA.bandwidth = 12_500
+        c.vfoA.vfoOffset = 100_000
+        c.vfoA.volume = 1
+        c.vfoA.squelchEnabled = true
+        c.vfoA.squelchLevel = -20
         engine.config = c
         let (l, _) = runEngine(engine, iq: iq)
         XCTAssertEqual(rms(l[...]), 0)
-        XCTAssertFalse(engine.status.squelchOpen)
+        XCTAssertFalse(engine.status.vfoA.squelchOpen)
     }
 
     /// FM carrier (1 kHz tone, given deviation) plus uniform noise; returns status and audio after the run.
@@ -394,13 +471,13 @@ final class DSPTests: XCTestCase {
         let engine = DSPEngine()
         var c = DSPConfig()
         c.sampleRate = fs
-        c.vfoOffset = offset
-        c.mode = mode
-        c.bandwidth = bandwidth
-        c.volume = 1
-        c.squelchEnabled = true
-        c.squelchAuto = true
-        c.squelchLevel = 0  // ignored in auto mode
+        c.vfoA.vfoOffset = offset
+        c.vfoA.mode = mode
+        c.vfoA.bandwidth = bandwidth
+        c.vfoA.volume = 1
+        c.vfoA.squelchEnabled = true
+        c.vfoA.squelchAuto = true
+        c.vfoA.squelchLevel = 0  // ignored in auto mode
         engine.config = c
         let (l, _) = runEngine(engine, iq: iq)
         return (engine.status, l)
@@ -418,12 +495,12 @@ final class DSPTests: XCTestCase {
         let engine = DSPEngine()
         var c = DSPConfig()
         c.sampleRate = fs
-        c.vfoOffset = offset
-        c.mode = .nfm
-        c.bandwidth = 12_500
-        c.volume = 1
-        c.squelchEnabled = true
-        c.squelchAuto = true
+        c.vfoA.vfoOffset = offset
+        c.vfoA.mode = .nfm
+        c.vfoA.bandwidth = 12_500
+        c.vfoA.volume = 1
+        c.vfoA.squelchEnabled = true
+        c.vfoA.squelchAuto = true
         engine.config = c
         let (l, _) = runEngine(engine, iq: iq)
         let rate = DSPEngine.rates(for: fs).audioRate
@@ -435,8 +512,8 @@ final class DSPTests: XCTestCase {
     func testAutoSquelchClosedOnNoise() {
         for (mode, bw) in [(DemodMode.nfm, 12_500.0), (.wfm, 180_000)] {
             let r = runAutoSquelch(mode: mode, bandwidth: bw, deviation: 0, amplitude: 0, noise: 0.05)
-            XCTAssertFalse(r.status.squelchOpen, "\(mode)")
-            XCTAssertLessThan(r.status.snrDB ?? 99, 3, "\(mode)")
+            XCTAssertFalse(r.status.vfoA.squelchOpen, "\(mode)")
+            XCTAssertLessThan(r.status.vfoA.snrDB ?? 99, 3, "\(mode)")
             XCTAssertEqual(rms(r.audio[...]), 0, "\(mode)")
         }
     }
@@ -444,14 +521,14 @@ final class DSPTests: XCTestCase {
     func testAutoSquelchOpensOnFMCarrier() {
         // Weak in absolute terms (−40 dBFS) but clean: auto squelch must not depend on level.
         let nfm = runAutoSquelch(mode: .nfm, bandwidth: 12_500, deviation: 2_500, amplitude: 0.01, noise: 0.002)
-        XCTAssertTrue(nfm.status.squelchOpen)
-        XCTAssertGreaterThan(nfm.status.snrDB ?? 0, 15)
+        XCTAssertTrue(nfm.status.vfoA.squelchOpen)
+        XCTAssertGreaterThan(nfm.status.vfoA.snrDB ?? 0, 15)
         XCTAssertGreaterThan(rms(nfm.audio[(nfm.audio.count / 2)...]), 0.1)
 
         // Full-deviation broadcast FM: the channel filter clips sidebands, which must not read as noise.
         let wfm = runAutoSquelch(mode: .wfm, bandwidth: 180_000, deviation: 75_000, amplitude: 0.3, noise: 0.002)
-        XCTAssertTrue(wfm.status.squelchOpen)
-        XCTAssertGreaterThan(wfm.status.snrDB ?? 0, 12)
+        XCTAssertTrue(wfm.status.vfoA.squelchOpen)
+        XCTAssertGreaterThan(wfm.status.vfoA.snrDB ?? 0, 12)
     }
 
     func testSNREstimateIsCalibrated() {
@@ -461,7 +538,7 @@ final class DSPTests: XCTestCase {
         for target in [0.0, 10.0, 20.0] {
             let amp = (noisePower * pow(10, target / 10)).squareRoot()
             let r = runAutoSquelch(mode: .nfm, bandwidth: bw, deviation: 2_000, amplitude: amp, noise: a)
-            XCTAssertEqual(Double(r.status.snrDB ?? -99), target, accuracy: target == 0 ? 4 : 2.5)
+            XCTAssertEqual(Double(r.status.vfoA.snrDB ?? -99), target, accuracy: target == 0 ? 4 : 2.5)
         }
     }
 
@@ -499,9 +576,9 @@ final class DSPTests: XCTestCase {
             let engine = DSPEngine()
             var c = DSPConfig()
             c.sampleRate = fs
-            c.mode = mode
-            c.bandwidth = mode.defaultBandwidth
-            c.vfoOffset = 250_000
+            c.vfoA.mode = mode
+            c.vfoA.bandwidth = mode.defaultBandwidth
+            c.vfoA.vfoOffset = 250_000
             c.fftSize = 16384
             engine.config = c
             let start = Date()

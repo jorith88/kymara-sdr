@@ -34,13 +34,25 @@ struct SpectrumOverlay: View {
                         .fixedSize()
                         .position(x: min(max(x, 30), w - 30), y: h - 8)
                 }
-                // VFO tag.
+                // VFO tags, the other VFO's fainter.
                 let vx = (radio.vfoFrequency - start) / span * w
-                Text(FrequencyFormat.short(radio.vfoFrequency))
+                if radio.otherInBand {
+                    let ox = (radio.otherVFO.frequency - start) / span * w
+                    Text("\(radio.selectedVFO.other.rawValue) " + FrequencyFormat.short(radio.otherVFO.frequency))
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Theme.vfoMarker(radio.selectedVFO.other).opacity(0.4), in: RoundedRectangle(cornerRadius: 3))
+                        .foregroundStyle(.white)
+                        .fixedSize()
+                        // Below the selected VFO's tag when they would overlap.
+                        .position(x: min(max(ox, 50), w - 50), y: abs(ox - vx) < 100 ? 28 : 10)
+                }
+                Text((radio.vfoBEnabled ? "\(radio.selectedVFO.rawValue) " : "") + FrequencyFormat.short(radio.vfoFrequency))
                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
                     .padding(.horizontal, 4)
                     .padding(.vertical, 1)
-                    .background(Theme.red.opacity(0.85), in: RoundedRectangle(cornerRadius: 3))
+                    .background(Theme.vfoMarker(radio.selectedVFO).opacity(0.85), in: RoundedRectangle(cornerRadius: 3))
                     .foregroundStyle(.white)
                     .fixedSize()
                     .position(x: min(max(vx, 50), w - 50), y: 10)
@@ -198,6 +210,7 @@ struct ContentView: View {
             cluster.isPaused = !visible
             freedv.isPaused = !visible
         })
+        .onChange(of: radio.reporter.callsign, initial: true) { _, call in freedv.ownCallsign = call }
         // Identified items make the toolbar user-customizable (View > Customize Toolbar…).
         .toolbar(id: "main") {
             ToolbarItem(id: "zoomOut", placement: .primaryAction) {
@@ -231,6 +244,12 @@ struct ContentView: View {
                 }
                 .disabled(!cluster.isEnabled && !freedv.isEnabled)
                 .help("Show or hide DX spot and FreeDV station labels on the spectrum (⇧⌘L)")
+            }
+            ToolbarItem(id: "vfoB", placement: .primaryAction) {
+                Toggle(isOn: Binding(get: { radio.vfoBEnabled }, set: { radio.setVFOB(enabled: $0) })) {
+                    Label("VFO B", systemImage: "rectangle.split.2x1")
+                }
+                .help("Switch the second receiver, VFO B, on or off (⇧⌘B)")
             }
             ToolbarItem(id: "favourites", placement: .primaryAction) {
                 Toggle(isOn: $radio.showBookmarks) {
