@@ -36,6 +36,16 @@ Two modules: **SDRCore** (sources, DSP, audio, recording — no UI) and **Kymara
 
 **DSP chain** (`DSPEngine.rates(for:)`): u8→float, DC removal, spectrum analyzer tap → NCO mix by `vfoOffset` → stage-1 decimation to ~240 kHz → WFM: channel filter, FM discriminator, RDS decoder on the MPX, `StereoDecoder` (pilot PLL, decimates to audio) → others: stage-2 decimation to ~48 kHz, channel filter (`FFTFilter`, overlap-save, complex taps for SSB), demodulate, auto notch (AM/SSB/DSB: a 1 s averaged FFT finds steady tones, narrow IIR notches remove them without latency), AGC. Audio rate is whatever falls out (48/51.2/… kHz); `AVAudioEngine` resamples. Filter passband edges per mode come from `DemodMode.filterEdges(bandwidth:)`, shared by DSP and the spectrum overlay.
 
+**VFO B** is a second receiver in the captured band. `DSPEngine` keeps conversion, DC removal and the spectrum;
+each VFO is a `Receiver` (`Receiver.swift`, NCO mix to squelched audio) configured by `DSPConfig.vfoA` / `vfoB`
+(nil = off). Receivers deliver different block sizes, so the engine queues each one's audio (`AudioFIFO`) and mixes
+what all have ready (route left/right/both, volume, mute; recording gets the mix without volume). A VFO beyond
+`DSPEngine.usableFraction` of the band is skipped and reported `inBand = false`. In `RadioController` the tuning and
+demodulation properties always belong to the *selected* VFO; the other waits in `otherVFO: VFOState` with its meter
+in `otherMeter`, and `selectVFO`/`swapVFOs` exchange them under the `swapping` flag (no didSet side effects).
+Selecting a VFO outside the band retunes the LO to it. The settings keep VFO A in the flat `RadioSettings` fields
+and add `vfoB`, `vfoBEnabled`, `selectedVFO` and A's `output`.
+
 **Tuning model.** `vfoFrequency` and `centerFrequency` (tuner LO) are absolute; the engine only sees `vfoOffset = vfo − center`. `RadioController.tune(to:follow:)` retunes the LO when the VFO leaves the usable band (jumps place the VFO at +fs/8 to avoid the DC spike). Any VFO change clears RDS (`vfoFrequency` didSet). Band switching (`AmateurBand` in `AmateurBand.swift`, Radio > Band, the ribbon's Band menu) keeps a band
 stack: `pushConfig` records frequency, mode and bandwidth for the band the VFO is in; tuning that changes mode and
 frequency together (favourite, spot, band) goes through `retune` so the new mode isn't recorded on the old band.
