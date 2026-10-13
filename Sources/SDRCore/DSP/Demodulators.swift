@@ -403,6 +403,8 @@ public final class AGC {
     private var peak: Float = 1e-4
     private var hang = 0
     private var gain: Float = 1
+    /// The envelope has been measured; until then the first block seeds it (see `process`).
+    private var primed = false
     public private(set) var currentGainDB: Float = 0
 
     public init(sampleRate: Double) {
@@ -416,6 +418,7 @@ public final class AGC {
             var lo: Float = -1, hi: Float = 1
             vDSP_vclip(x, 1, &lo, &hi, x, 1, vDSP_Length(count))
             currentGainDB = manualGainDB
+            primed = false
             return
         }
         let (decayTime, hangTime): (Double, Double) = {
@@ -431,6 +434,15 @@ public final class AGC {
         let hangSamples = Int(sampleRate * hangTime)
         let target: Float = 0.3
         let maxGain: Float = 30_000
+        if !primed && count > 0 {
+            // Start from the first block's peak instead of a near-zero envelope, which would let the gain run
+            // up and clip the first ~15 ms (a pop after every mode change).
+            var m: Float = 0
+            vDSP_maxmgv(x, 1, &m, vDSP_Length(count))
+            peak = max(m, peak)
+            gain = min(target / max(peak, 1e-9), maxGain)
+            primed = true
+        }
         var p = peak, h = hang, g = gain
         for k in 0..<count {
             let env = abs(x[k])

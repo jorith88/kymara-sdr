@@ -155,6 +155,8 @@ final class Receiver {
             envM2 = 0
             envM4 = 0
             snrDB = -20
+            // Fade in the new chain's audio (through the squelch fade) so its first samples don't click.
+            squelchGain = 0
         }
         if structural || previous!.0.bandwidth != c.bandwidth || previous!.0.radeLSB != c.radeLSB {
             buildChannelFilter(c)
