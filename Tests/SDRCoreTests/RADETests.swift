@@ -11,9 +11,10 @@ final class RADETests: XCTestCase {
     /// `rade_v1_offair_8k.wav`: 12 s of a real RADE V1 over as received in USB (8 kHz mono): in sync from ~0.6 s,
     /// end of over at ~10.6 s (callsign VK5KVA), then no signal. From the rade_c repository (FDV_offair.wav).
     ///
-    /// `rade_v2_8k.wav`: 13 s of RADE V2 in USB (8 kHz mono): 1 s of noise, a 10 s over ending in an end-of-over
-    /// frame, 2 s of noise; about 12 dB SNR. rade_c's `rade_tx_wav --v2` (commit c8a3dc1) on its input_sample.wav,
-    /// with white noise added.
+    /// `rade_v2_8k.wav`: 13 s of RADE V2 in USB (8 kHz mono): 1 s of noise, a 10 s over sending the callsign N0CALL
+    /// on its data channel and ending in an end-of-over frame, 2 s of noise; about 12 dB SNR. rade_c's
+    /// `rade_tx_wav --v2` (commit c8a3dc1) on its input_sample.wav, with the data symbols from freedv-backend's
+    /// radev2-dev rade_text (commit 6053eaa) and white noise added.
     private func loadFixture(_ name: String = "rade_v1_offair_8k") throws -> [Float] {
         let url = try XCTUnwrap(Bundle.module.resourceURL?.appendingPathComponent("Fixtures/\(name).wav"))
         let data = try Data(contentsOf: url)
@@ -107,7 +108,9 @@ final class RADETests: XCTestCase {
         XCTAssertTrue(synced)
         XCTAssertGreaterThan(bestSNR, 8)
         XCTAssertEqual(decoder.status.endOfOvers, 1)
-        XCTAssertNil(decoder.status.callsign, "V2 sends no callsign")
+        // V2 repeats the callsign during the over (one 4.5 s LDPC block per copy).
+        XCTAssertEqual(decoder.status.callsign, "N0CALL")
+        XCTAssertGreaterThanOrEqual(decoder.status.callsignCount, 1)
         let r = Int(rate)
         let during = rms(speech[(2 * r)..<(9 * r)])
         XCTAssertGreaterThan(during, 0.02, "speech while in sync")
@@ -191,7 +194,7 @@ final class RADETests: XCTestCase {
     /// not sync.
     func testEngineRADEEndToEnd() throws {
         try XCTSkipUnless(RADEDecoder.isAvailable, "RADE not built (scripts/fetch-rade.sh)")
-        for (mode, fixture, callsign) in [(DemodMode.rade, "rade_v1_offair_8k", "VK5KVA"), (.radeV2, "rade_v2_8k", nil)] {
+        for (mode, fixture, callsign) in [(DemodMode.rade, "rade_v1_offair_8k", "VK5KVA"), (.radeV2, "rade_v2_8k", "N0CALL")] {
             for lsb in [false, true] {
                 let what = "\(mode.rawValue) \(lsb ? "LSB" : "USB")"
                 let iq = try makeIQ(fixture, lsb: lsb)

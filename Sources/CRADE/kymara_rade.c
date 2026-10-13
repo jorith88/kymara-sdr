@@ -33,6 +33,7 @@ int kymara_rade_callsign_count(const kymara_rade *k) { (void)k; return 0; }
 #include "fargan.h"
 #include "lpcnet.h"
 #include "rade_text.h"
+#include "rade_text_v2.h"
 
 /// FARGAN needs this many feature frames to prime its state before it synthesises.
 #define WARMUP_FRAMES 5
@@ -49,7 +50,7 @@ struct kymara_rade {
     int rx_fill;
     float *features;
     int n_features;
-    /// V1 only: V2 has no end-of-over data, so no callsign.
+    /// V1 only: V2 sends its callsign during the over instead.
     float *eoo_bits;
 
     int sync;
@@ -57,13 +58,15 @@ struct kymara_rade {
     float frequency_offset;
     int end_of_overs;
 
-    /// FreeDV's end-of-over text: callsign, 6-bit characters, LDPC(112,56) and CRC8.
+    /// V1: FreeDV's end-of-over text: callsign, 6-bit characters, LDPC(112,56) and CRC8.
     rade_text_t text;
+    /// V2: the callsign streamed during the over, one BPSK symbol per modem frame (also LDPC(112,56)).
+    void *text_v2;
     char callsign[16];
     int callsign_count;
 };
 
-static void on_callsign(rade_text_t text, const char *callsign, int length, void *state) {
+static void on_callsign(void *text, const char *callsign, int length, void *state) {
     (void)text;
     kymara_rade *k = state;
     if (length >= (int)sizeof(k->callsign)) length = sizeof(k->callsign) - 1;
@@ -109,15 +112,26 @@ kymara_rade *kymara_rade_open(int version) {
         return NULL;
     }
     fargan_init(&k->fargan);
-    k->text = rade_text_create();
-    rade_text_enable_stats_output(k->text, 0);
-    rade_text_set_rx_callback(k->text, on_callsign, k);
+    if (k->rx2) {
+        k->text_v2 = kymara_rade_text_v2_create();
+        if (!k->text_v2) {
+            kymara_rade_close(k);
+            return NULL;
+        }
+        kymara_rade_text_v2_enable_stats_output(k->text_v2, 0);
+        kymara_rade_text_v2_set_rx_callback(k->text_v2, on_callsign, k);
+    } else {
+        k->text = rade_text_create();
+        rade_text_enable_stats_output(k->text, 0);
+        rade_text_set_rx_callback(k->text, on_callsign, k);
+    }
     return k;
 }
 
 void kymara_rade_close(kymara_rade *k) {
     if (!k) return;
     if (k->text) rade_text_destroy(k->text);
+    if (k->text_v2) kymara_rade_text_v2_destroy(k->text_v2);
     free(k->rx);
     free(k->rx2);
     free(k->rx_in);
@@ -172,11 +186,14 @@ int kymara_rade_process(kymara_rade *k, const float *re, const float *im, int co
             // eoo_bits holds QPSK symbols as I/Q pairs.
             if (k->rx) rade_text_rx(k->text, k->eoo_bits, rade_rx_n_eoo_bits(k->rx) / 2);
         }
+        if (k->rx2 && (ret & 0x1)) kymara_rade_text_v2_rx_symbol(k->text_v2, rade_rx_v2_get_data_symbol(k->rx2));
         int sync = k->rx2 ? k->rx2->state == RADE_RX_V2_SYNC : rade_rx_sync(k->rx);
         if (!sync && k->sync) {
             // Lost the signal: start the vocoder afresh on the next over.
             fargan_init(&k->fargan);
             k->warmup_count = 0;
+            // Where the received bits are in the callsign's cycle is lost too.
+            if (k->text_v2) kymara_rade_text_v2_rx_reset(k->text_v2);
         }
         k->sync = sync;
         if (sync) {

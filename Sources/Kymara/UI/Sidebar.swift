@@ -184,11 +184,8 @@ struct ReceiverPanel: View {
                 Row("Decoder") {
                     RADEStatusLabel()
                 }
-                // Only RADE V1 sends a callsign at the end of an over.
-                if radio.mode == .rade {
-                    Row("Callsign") {
-                        RADECallsignLabel()
-                    }
+                Row("Callsign") {
+                    RADECallsignLabel()
                 }
             }
 
@@ -326,10 +323,11 @@ private struct RADECallsignLabel: View {
             Text(call)
                 .font(.callout.monospaced().weight(.semibold))
                 .textSelection(.enabled)
-                .help("Sent at the end of the last over")
+                .help(radio.mode == .rade ? "Sent at the end of the last over" : "Sent during the over")
         } else {
             Text("none yet").font(.caption2).foregroundStyle(.secondary)
-                .help("FreeDV sends the callsign at the end of each over")
+                .help(radio.mode == .rade ? "FreeDV sends the callsign at the end of each over"
+                                               : "RADE V2 repeats the callsign during the over, every 4.5 s")
         }
     }
 }

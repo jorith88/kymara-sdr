@@ -33,8 +33,8 @@ public struct RADEStatus: Equatable, Sendable {
     public var snrDB: Float = 0
     /// Offset of the received signal from where it should be (Hz), valid while in sync.
     public var frequencyOffset: Float = 0
-    /// Callsign from the last end-of-over that decoded, and how many have decoded so far
-    /// (so the same callsign sent again still counts as news). V1 only: V2 sends no callsign.
+    /// The last callsign that decoded (V1 sends it at the end of an over, V2 repeatedly during it), and how many
+    /// have decoded so far (so the same callsign sent again still counts as news).
     public var callsign: String?
     public var callsignCount = 0
     /// End-of-over frames seen, whether or not their callsign decoded.

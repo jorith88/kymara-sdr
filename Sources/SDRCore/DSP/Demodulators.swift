@@ -10,7 +10,7 @@ public enum DemodMode: String, CaseIterable, Codable, Identifiable, Sendable {
     case cw = "CW"
     /// FreeDV RADE V1 digital voice (in USB, or LSB conjugated to USB orientation).
     case rade = "RADE"
-    /// FreeDV RADE V2 digital voice (the same, without the end-of-over callsign).
+    /// FreeDV RADE V2 digital voice (the same; the callsign comes during the over).
     case radeV2 = "RADE2"
 
     public var id: String { rawValue }

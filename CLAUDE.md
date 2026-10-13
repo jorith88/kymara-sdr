@@ -81,10 +81,13 @@ decoder's conv layers need more inputs than Opus allows). The library sources (~
 `kymara_rade.c` compiles to stubs (`__has_include`) and `DemodMode.available` hides RADE. `build-app.sh` runs
 `fetch-rade.sh --if-needed` (refetches when the pins, the script or the patches change) and fails if the binary lacks
 the decoder, so a release can't ship without RADE.
-The end-of-over callsign (V1 only: V2 has no EOO data, and its BPSK data-symbol channel has no agreed text format
-yet) is decoded by freedv-backend's `rade_text.cpp` (LDPC(112,56), CRC8), also fetched. Fixes to
+V1's end-of-over callsign is decoded by freedv-backend's `rade_text.cpp` (LDPC(112,56), CRC8), also fetched. Fixes to
 rade_c live in `scripts/patches/` and are applied by the fetch script (one fixes its EOO demodulator, which returned
-uninitialised memory and made callsign decoding hit-and-miss).
+uninitialised memory and made callsign decoding hit-and-miss). V2 has no EOO data; it streams the callsign during the
+over, one BPSK data symbol per modem frame, as repeated LDPC(112,56) blocks (base-38 characters, CRC8, combining of
+copies). That decoder is `rade_text.cpp` from freedv-backend's `radev2-dev` branch (pinned separately, an unreleased
+format that may still change); it has the same C names as V1's, so `rade_text_v2.cpp` includes it (as
+`rade_text.cpp.inc`, which SwiftPM doesn't compile on its own) inside a namespace with the functions renamed.
 `FreeDVReporter` (`Sources/Kymara/FreeDVReporter/`, owned by `RadioController`, settings under their own key)
 reports RADE reception to qso.freedv.org as a receive-only station, following freedv-backend's `FreeDVReporter.cpp`:
 Socket.IO over a websocket (`SocketIOClient`, a minimal client, no polling transport), auth with callsign, locator
