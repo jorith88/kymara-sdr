@@ -132,6 +132,7 @@ final class WaterfallRenderer: NSObject, MTKViewDelegate {
         u.filterStart = Float((r.filterStart - bandStart) / fs)
         u.filterEnd = Float((r.filterEnd - bandStart) / fs)
         u.vfo = Float((r.vfoFrequency - bandStart) / fs)
+        if r.otherInBand { u.otherVFO = Float((r.otherVFO.frequency - bandStart) / fs) }
         u.light = light ? 1 : 0
         if let hover = r.hover { u.hover = Float((hover.frequency - bandStart) / fs) }
         if let preview = r.hoverPassband {

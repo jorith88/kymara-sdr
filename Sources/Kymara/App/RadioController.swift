@@ -212,7 +212,8 @@ final class RadioController {
     /// passband (a click there drags it instead of tuning) and while a mouse button is held.
     var hoverPassband: (lo: Double, hi: Double)? {
         guard let hover, NSEvent.pressedMouseButtons == 0,
-              hover.frequency < filterStart || hover.frequency > filterEnd else { return nil }
+              hover.frequency < filterStart || hover.frequency > filterEnd,
+              !otherInBand || hover.frequency < otherFilterStart || hover.frequency > otherFilterEnd else { return nil }
         let f = snapped(hover.frequency)
         return (f + filterEdges.lo, f + filterEdges.hi)
     }

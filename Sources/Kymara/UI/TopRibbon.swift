@@ -16,7 +16,7 @@ struct TopRibbon: View {
             // VFO display.
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text("VFO A")
+                    Text("VFO \(radio.selectedVFO.rawValue)")
                         .font(.system(size: 10, weight: .bold))
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
@@ -84,6 +84,11 @@ struct TopRibbon: View {
             .background(Theme.lcd, in: RoundedRectangle(cornerRadius: 6))
             .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.border))
             .fixedSize()
+
+            if radio.vfoBEnabled {
+                OtherVFODisplay()
+                    .fixedSize()
+            }
 
             // Mode + bandwidth.
             VStack(alignment: .leading, spacing: 5) {

@@ -29,6 +29,13 @@ private struct SpectrumColors {
         fillTop: .rgba(0.05, 0.35, 0.85, 0.8), fillBottom: .rgba(0.05, 0.35, 0.85, 0.2), peak: .rgba(0.9, 0.5, 0, 0.75),
         trace: .rgba(0, 0.12, 0.35, 1), hover: .rgba(0, 0, 0, 0.35), hoverPassband: .rgba(0, 0, 0, 0.05), vfo: .rgba(0.9, 0.15, 0.12, 0.95),
         centre: .rgba(0.9, 0.55, 0, 0.9))
+
+    /// The VFO that is not selected: the same colours, fainter.
+    var otherPassband: SIMD4<Float> { faded(passband, 0.6) }
+    var otherPassbandEdge: SIMD4<Float> { faded(passbandEdge, 0.45) }
+    var otherVFO: SIMD4<Float> { faded(vfo, 0.45) }
+
+    private func faded(_ c: SIMD4<Float>, _ f: Float) -> SIMD4<Float> { SIMD4(c.x, c.y, c.z, c.w * f) }
 }
 
 /// Spectrum trace, fill, grid, passband and markers — all geometry rendered on the GPU.
@@ -145,6 +152,20 @@ final class SpectrumRenderer: NSObject, MTKViewDelegate {
             grid += [ColorVertex(position: [-1, gy], color: gridColor), ColorVertex(position: [1, gy], color: gridColor)]
         }
         add(.line, grid)
+
+        // The other VFO's passband and line, under the selected one's.
+        if r.otherInBand {
+            let ox0 = x(r.otherFilterStart), ox1 = x(r.otherFilterEnd)
+            add(.triangleStrip, quad(ox0, -1, ox1, 1, colors.otherPassband))
+            let oe = colors.otherPassbandEdge
+            add(.line, [
+                ColorVertex(position: [ox0, -1], color: oe), ColorVertex(position: [ox0, 1], color: oe),
+                ColorVertex(position: [ox1, -1], color: oe), ColorVertex(position: [ox1, 1], color: oe),
+            ])
+            let ovx = x(r.otherVFO.frequency)
+            let ovw = Float(1.0 / Double(width) * 2 * scale * 0.5)
+            add(.triangleStrip, quad(ovx - ovw, -1, ovx + ovw, 1, colors.otherVFO))
+        }
 
         // Passband.
         let fx0 = x(r.filterStart), fx1 = x(r.filterEnd)

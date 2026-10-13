@@ -55,7 +55,7 @@ final class InteractiveMTKView: MTKView {
         return bottom + Double(y / max(bounds.height, 1)) * (r.spectrumTop - bottom)
     }
 
-    private enum Hit { case edgeLow, edgeHigh, passband, background }
+    private enum Hit { case edgeLow, edgeHigh, passband, otherPassband, background }
 
     private func hitTest(x: CGFloat) -> Hit {
         guard let r = radio else { return .background }
@@ -65,6 +65,10 @@ final class InteractiveMTKView: MTKView {
             if abs(x - hi) < 5 { return .edgeHigh }
         }
         if x >= min(lo, hi - 4) && x <= max(hi, lo + 4) { return .passband }
+        if r.otherInBand {
+            let olo = screenX(r.otherFilterStart), ohi = screenX(r.otherFilterEnd)
+            if x >= min(olo, ohi - 4) && x <= max(ohi, olo + 4) { return .otherPassband }
+        }
         return .background
     }
 
@@ -77,7 +81,7 @@ final class InteractiveMTKView: MTKView {
            content.hitTest(content.convert(event.locationInWindow, from: nil)) !== self { return }
         switch hitTest(x: p.x) {
         case .edgeLow, .edgeHigh: NSCursor.resizeLeftRight.set()
-        case .passband: NSCursor.openHand.set()
+        case .passband, .otherPassband: NSCursor.openHand.set()
         case .background: NSCursor.crosshair.set()
         }
     }
@@ -100,6 +104,11 @@ final class InteractiveMTKView: MTKView {
         case .edgeLow: drag = .edgeLow
         case .edgeHigh: drag = .edgeHigh
         case .passband:
+            drag = .tune(grabOffset: frequency(at: p.x) - r.vfoFrequency)
+            NSCursor.closedHand.set()
+        case .otherPassband:
+            // Select the other VFO; dragging then moves it.
+            r.toggleSelectedVFO()
             drag = .tune(grabOffset: frequency(at: p.x) - r.vfoFrequency)
             NSCursor.closedHand.set()
         case .background: drag = .pending(startX: p.x)

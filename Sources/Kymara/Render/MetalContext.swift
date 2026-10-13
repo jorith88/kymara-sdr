@@ -47,6 +47,7 @@ struct WaterfallUniforms {
     float scale;
     float previewStart;
     float previewEnd;
+    float otherVFO;
 };
 
 vertex VOut quadVertex(uint vid [[vertex_id]]) {
@@ -122,6 +123,10 @@ fragment float4 waterfallFragment(VOut in [[stage_in]],
     if (u.hover > -1000.0 && abs(xs - u.hover) < px * u.scale * 0.5 && fmod(in.position.y, 8.0 * u.scale) < 4.0 * u.scale) {
         c.rgb = mix(c.rgb, contrast, 0.75);
     }
+    // The other VFO's line, 1 pt wide and fainter.
+    if (u.otherVFO > -1000.0 && abs(xs - u.otherVFO) < px * u.scale * 0.5) {
+        c.rgb = mix(c.rgb, float3(1.0, 0.25, 0.2), 0.5);
+    }
     // VFO line, 2 pt wide.
     if (abs(xs - u.vfo) < px * u.scale) {
         c.rgb = mix(c.rgb, float3(1.0, 0.25, 0.2), 0.9);
@@ -155,6 +160,8 @@ struct WaterfallUniforms {
     /// Passband preview at the hover position (fractions of the band); empty when start > end.
     var previewStart: Float = 1
     var previewEnd: Float = 0
+    /// The other VFO (fraction of the band), or -1e6 when it is off or out of band.
+    var otherVFO: Float = -1e6
 }
 
 @MainActor
