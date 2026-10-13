@@ -8,7 +8,8 @@ struct OtherVFODisplay: View {
     var body: some View {
         let vfo = radio.otherVFO
         let meter = radio.otherMeter
-        let letter = radio.selectedVFO.other.rawValue
+        let id = radio.selectedVFO.other
+        let letter = id.rawValue
         Button {
             radio.toggleSelectedVFO()
         } label: {
@@ -18,8 +19,8 @@ struct OtherVFODisplay: View {
                         .font(.system(size: 10, weight: .bold))
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
-                        .background(Theme.fillStrong, in: RoundedRectangle(cornerRadius: 3))
-                        .foregroundStyle(.secondary)
+                        .background(Theme.vfo(id).opacity(0.25), in: RoundedRectangle(cornerRadius: 3))
+                        .foregroundStyle(Theme.vfo(id))
                     Text(vfo.modeLabel)
                         .font(.system(size: 10.5, weight: .medium))
                         .foregroundStyle(.secondary)
@@ -37,17 +38,17 @@ struct OtherVFODisplay: View {
                     if !radio.otherInBand {
                         Text("Out of band")
                             .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(Theme.amber)
+                            .foregroundStyle(.secondary)
                     } else {
                         level(meter.signalDB)
                         if let call = meter.radeCallsign, vfo.mode == .rade {
                             Text(call)
                                 .font(.system(size: 10, weight: .bold).monospaced())
-                                .foregroundStyle(Theme.accent)
+                                .foregroundStyle(Theme.vfo(id))
                         } else if vfo.mode == .wfm, meter.rds.hasData {
                             Text(meter.rds.trimmedProgramService)
                                 .font(.system(size: 10, weight: .bold).monospaced())
-                                .foregroundStyle(Theme.accent)
+                                .foregroundStyle(Theme.vfo(id))
                         }
                     }
                 }

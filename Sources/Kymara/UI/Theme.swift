@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import SDRCore
 
 enum AppTheme: String, CaseIterable, Identifiable, Codable {
     case system = "System"
@@ -81,6 +82,9 @@ enum Theme {
     static let red = Color(nsColor: .systemRed)
     static let green = Color(nsColor: .systemGreen)
     static let amber = Color(nsColor: .systemOrange)
+
+    /// Identifies a VFO in the LCDs: A in the accent colour, B in orange.
+    static func vfo(_ id: VFOID) -> Color { id == .a ? accent : amber }
 }
 
 /// Collapsible sidebar section in the SDR Console style.

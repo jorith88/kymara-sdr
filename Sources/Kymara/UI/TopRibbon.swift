@@ -20,8 +20,8 @@ struct TopRibbon: View {
                         .font(.system(size: 10, weight: .bold))
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
-                        .background(Theme.accent.opacity(0.25), in: RoundedRectangle(cornerRadius: 3))
-                        .foregroundStyle(Theme.accent)
+                        .background(Theme.vfo(radio.selectedVFO).opacity(0.25), in: RoundedRectangle(cornerRadius: 3))
+                        .foregroundStyle(Theme.vfo(radio.selectedVFO))
                     Text(radio.modeLabel + "  ·  " + FrequencyFormat.bandwidth(radio.bandwidth))
                         .font(.system(size: 10.5, weight: .medium))
                         .foregroundStyle(.secondary)
@@ -34,7 +34,7 @@ struct TopRibbon: View {
                     if let call = radio.radeCallsign, radio.mode == .rade {
                         Text(call)
                             .font(.system(size: 10, weight: .bold).monospaced())
-                            .foregroundStyle(Theme.accent)
+                            .foregroundStyle(Theme.vfo(radio.selectedVFO))
                             .help("Callsign from the last RADE over")
                             .accessibilityLabel("Callsign \(call)")
                     }
