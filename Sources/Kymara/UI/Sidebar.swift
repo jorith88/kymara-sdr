@@ -614,6 +614,14 @@ struct RecordingPanel: View {
             HStack {
                 Button(radio.recordingAudio ? "Stop audio" : "Record audio") { radio.toggleAudioRecording() }
                 Button(radio.recordingIQ ? "Stop I/Q" : "Record I/Q") { radio.toggleIQRecording() }
+                if let start = radio.recordingStart, radio.recordingAudio || radio.recordingIQ {
+                    TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                        Text(Duration.seconds(ctx.date.timeIntervalSince(start)).formatted(.time(pattern: .minuteSecond)))
+                            .font(.caption.monospaced())
+                            .foregroundStyle(Theme.red)
+                            .accessibilityLabel("Recording time")
+                    }
+                }
             }
             .controlSize(.small)
             Text("Audio: 16-bit stereo WAV. I/Q: 8-bit WAV (playable as an I/Q file source).")

@@ -1,7 +1,7 @@
 import SwiftUI
 import SDRCore
 
-/// The top bar: power, VFO display, mode/bandwidth, S-meter, audio, recording.
+/// The top bar: power, VFO displays, mode/bandwidth, S-meter, audio.
 struct TopRibbon: View {
     @Environment(RadioController.self) private var radio
 
@@ -148,13 +148,6 @@ struct TopRibbon: View {
                     SMeterView()
                     divider
                     audioControls
-                    divider
-                    recordControls
-                }
-                HStack(spacing: 14) {
-                    SMeterView()
-                    divider
-                    audioControls
                 }
                 SMeterView()
             }
@@ -259,41 +252,5 @@ struct TopRibbon: View {
             return radio.snrDB.map { String(format: "Squelch auto · SNR %3.0f dB", $0) } ?? "Squelch auto"
         }
         return String(format: "Squelch %.0f dBFS", radio.squelchLevel)
-    }
-
-    private var recordControls: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            recordButton(title: "Audio", active: radio.recordingAudio) { radio.toggleAudioRecording() }
-            recordButton(title: "I/Q", active: radio.recordingIQ) { radio.toggleIQRecording() }
-            if let start = radio.recordingStart, radio.recordingAudio || radio.recordingIQ {
-                TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                    Text(Duration.seconds(ctx.date.timeIntervalSince(start)).formatted(.time(pattern: .minuteSecond)))
-                        .font(.caption.monospaced())
-                        .foregroundStyle(Theme.red)
-                        .accessibilityLabel("Recording time")
-                }
-            }
-        }
-    }
-
-    private func recordButton(title: String, active: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                Circle()
-                    .fill(active ? Theme.red : Theme.red.opacity(0.35))
-                    .frame(width: 9, height: 9)
-                    .shadow(color: active ? Theme.red : .clear, radius: 4)
-                    .accessibilityHidden(true)
-                Text(active ? "Stop \(title)" : "Record \(title)")
-                    .font(.caption.weight(.medium))
-            }
-            .frame(width: 96, alignment: .leading)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(active ? Theme.fillStrong : Theme.fill, in: RoundedRectangle(cornerRadius: 4))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityValue(active ? "Recording" : "")
     }
 }
