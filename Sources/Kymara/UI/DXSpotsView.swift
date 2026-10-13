@@ -56,10 +56,7 @@ struct DXSpotsView: View {
                             Button("Tune") { radio.tune(to: spot) }
                             Button("Add to Favourites") { radio.addBookmark(spot) }
                             Divider()
-                            Button("Copy Callsign") {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(spot.dxCall, forType: .string)
-                            }
+                            CallsignMenuItems(callsign: spot.dxCall)
                             if let url = Self.profileURL(spot.dxCall) {
                                 Button("Look Up on \(cluster.providerName)") { NSWorkspace.shared.open(url) }
                             }

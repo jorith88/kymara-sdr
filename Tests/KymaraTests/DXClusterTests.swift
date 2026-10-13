@@ -344,6 +344,12 @@ final class DXClusterTests: XCTestCase {
         store.isEnabled = false
     }
 
+    func testQRZLookupURL() {
+        XCTAssertEqual(CallsignMenuItems.qrzURL("pa0abc")?.absoluteString, "https://www.qrz.com/db/PA0ABC")
+        XCTAssertEqual(CallsignMenuItems.qrzURL("EA8/PA0ABC/P")?.absoluteString, "https://www.qrz.com/db/EA8%2FPA0ABC%2FP")
+        XCTAssertNil(CallsignMenuItems.qrzURL(" "))
+    }
+
     @MainActor
     func testRefreshIntervalHasAMinimum() {
         let store = DXClusterStore(provider: FakeProvider())
