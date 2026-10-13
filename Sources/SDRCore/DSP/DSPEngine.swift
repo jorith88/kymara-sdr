@@ -3,28 +3,13 @@ import Accelerate
 
 public struct DSPConfig: Equatable, Sendable {
     public var sampleRate: Double = 2_400_000
-    /// VFO frequency relative to the tuner centre frequency.
-    public var vfoOffset: Double = 0
-    public var mode: DemodMode = .wfm
-    public var bandwidth: Double = 180_000
-    public var squelchEnabled = false
-    public var squelchLevel: Float = -60
-    /// FM modes: open on carrier-to-noise ratio instead of level, so no threshold needs setting.
-    /// Other modes fall back to the level squelch.
-    public var squelchAuto = false
-    public var agcMode: AGCMode = .medium
-    public var afGainDB: Float = 20
-    /// Remove steady tones from the audio (modes where `DemodMode.supportsAutoNotch`).
-    public var autoNotch = false
-    public var volume: Float = 0.5
-    public var muted = false
+    /// VFO A, always running.
+    public var vfoA = ReceiverConfig()
+    /// VFO B, a second receiver in the same band; nil when off.
+    public var vfoB: ReceiverConfig?
     /// De-emphasis time constant in seconds (0 = off).
     public var deemphasis: Double = 50e-6
-    public var stereo = true
-    public var rds = true
     public var cwPitch: Double = 700
-    /// RADE mode: the signal is in LSB (resolved from `RADESideband` by the caller, which knows the frequency).
-    public var radeLSB = false
     public var dcCorrection = true
     public var swapIQ = false
     public var fftSize = 8192
@@ -35,24 +20,28 @@ public struct DSPConfig: Equatable, Sendable {
     public var peakDecay: Float = 0.5
 
     public init() {}
+
+    public subscript(vfo: VFOID) -> ReceiverConfig? {
+        get { vfo == .a ? vfoA : vfoB }
+        set {
+            if vfo == .a { if let newValue { vfoA = newValue } } else { vfoB = newValue }
+        }
+    }
 }
 
 public struct DSPStatus: Sendable {
-    public var levelDB: Float = -150
-    public var squelchOpen = false
-    /// Estimated carrier-to-noise ratio in the channel (FM modes only).
-    public var snrDB: Float?
-    public var stereoLocked = false
+    public var vfoA = ReceiverStatus()
+    /// Nil while VFO B is off.
+    public var vfoB: ReceiverStatus?
     public var audioRate: Double = 48_000
-    public var agcGainDB: Float = 0
     public var overload = false
     public var samplesPerSecond: Double = 0
-    public var rds = RDSInfo()
-    /// RADE decoder state (RADE mode only).
-    public var rade: RADEStatus?
+
+    public subscript(vfo: VFOID) -> ReceiverStatus? { vfo == .a ? vfoA : vfoB }
 }
 
-/// The receive chain. `process` is called from the source thread; configuration is applied from any thread.
+/// The receive chain: sample conversion, DC removal and the spectrum, then one `Receiver` per VFO whose audio is
+/// mixed into `audioRing`. `process` is called from the source thread; configuration is applied from any thread.
 public final class DSPEngine: @unchecked Sendable {
     public struct Rates: Equatable {
         public let decim1: Int
@@ -68,6 +57,9 @@ public final class DSPEngine: @unchecked Sendable {
         let d2 = max(1, Int((r1 / 48_000).rounded()))
         return Rates(decim1: d1, rate1: r1, decim2: d2, audioRate: r1 / Double(d2))
     }
+
+    /// Usable part of the band either side of the centre; a VFO beyond it is out of band.
+    public static let usableFraction = 0.48
 
     public let spectrum = SpectrumStore()
     public let audioRing = AudioRingBuffer()
@@ -91,32 +83,13 @@ public final class DSPEngine: @unchecked Sendable {
     private var waterfallCount = 0
     private var samplesSinceSpectrum: Double = 0
     private var samplesSinceLine: Double = 0
-    private var mixer = Mixer()
-    private var cwMixer = Mixer()
-    private var stage1 = ComplexDecimator(factor: 1, taps: [1])
-    private var stage2 = ComplexDecimator(factor: 1, taps: [1])
-    private var channel = FFTFilter(realTaps: [1])
-    private var fm = FMDemodulator()
-    private var stereo: StereoDecoder?
-    private var rds: RDSDecoder?
-    private var rade: RADEDecoder?
-    private var rdsResetPending = false
-    private var monoDecimator = RealDecimator(factor: 1, taps: [1])
-    private var agc = AGC(sampleRate: 48_000)
-    private var notch = AutoNotch(sampleRate: 48_000)
-    private var dcBlock = DCBlocker(cutoff: 30, sampleRate: 48_000)
-    private var nfmAudio = NFMAudio(sampleRate: 48_000)
-    private var squelchDelay = DelayLine(delay: 0)
-    private var deemphL = Deemphasis(tau: 0, sampleRate: 48_000)
-    private var deemphR = Deemphasis(tau: 0, sampleRate: 48_000)
+    private let receivers = [Receiver(), Receiver()]
+    /// Audio waiting to be mixed, per receiver (block sizes differ between receivers).
+    private var pending = [AudioFIFO(), AudioFIFO()]
+    /// Audio samples owed while no receiver is in band, so silence keeps the output going.
+    private var silenceDebt: Double = 0
     private var dcI: Float = 0
     private var dcQ: Float = 0
-    private var squelchOpen = false
-    private var squelchHang: Double = 0
-    private var squelchGain: Float = 0
-    private var envM2: Double = 0
-    private var envM4: Double = 0
-    private var snrDB: Float = -20
     private var rateCounter = 0
     private var rateStart = DispatchTime.now().uptimeNanoseconds
 
@@ -124,10 +97,8 @@ public final class DSPEngine: @unchecked Sendable {
     private var floats: [Float] = []
     private var bufI: [Float] = []
     private var bufQ: [Float] = []
-    private var demod: [Float] = []
-    private var mags: [Float] = []
-    private var left: [Float] = []
-    private var right: [Float] = []
+    private var mixL: [Float] = []
+    private var mixR: [Float] = []
     private var outL: [Float] = []
     private var outR: [Float] = []
 
@@ -140,10 +111,12 @@ public final class DSPEngine: @unchecked Sendable {
 
     public var status: DSPStatus { statusLock.withLock { currentStatus } }
 
-    /// Forget the current station's RDS data (call after retuning).
-    public func resetRDS() {
-        configLock.withLock { rdsResetPending = true }
-        statusLock.withLock { currentStatus.rds = RDSInfo() }
+    /// Forget the station's RDS data on one VFO (call after retuning it).
+    public func resetRDS(vfo: VFOID = .a) {
+        receivers[vfo == .a ? 0 : 1].resetRDS()
+        statusLock.withLock {
+            if vfo == .a { currentStatus.vfoA.rds = RDSInfo() } else { currentStatus.vfoB?.rds = RDSInfo() }
+        }
     }
 
     public var audioRate: Double { DSPEngine.rates(for: config.sampleRate).audioRate }
@@ -163,87 +136,20 @@ public final class DSPEngine: @unchecked Sendable {
     // MARK: Building
 
     private func rebuild(_ c: DSPConfig, previous: DSPConfig?) {
-        let structural = previous == nil || previous!.sampleRate != c.sampleRate || previous!.mode != c.mode
-        if structural {
+        if previous == nil || previous!.sampleRate != c.sampleRate {
             rates = DSPEngine.rates(for: c.sampleRate)
-            let fs = c.sampleRate
-            if rates.decim1 > 1 {
-                let r1 = rates.rate1
-                stage1 = ComplexDecimator(factor: rates.decim1,
-                                          taps: FIR.lowpass(cutoff: 0.46 * r1 / fs, transition: 0.12 * r1 / fs, maxTaps: 2047))
-            } else {
-                stage1 = ComplexDecimator(factor: 1, taps: [1])
-            }
-            let r1 = rates.rate1
-            let ra = rates.audioRate
-            if c.mode == .wfm {
-                stereo = StereoDecoder(inputRate: r1, decimation: rates.decim2)
-                rds = RDSDecoder(inputRate: r1)
-                let cutoff = min(15_000, ra * 0.42)
-                monoDecimator = RealDecimator(factor: rates.decim2,
-                                              taps: FIR.lowpass(cutoff: cutoff / r1, transition: max(2_000, ra * 0.5 - cutoff) / r1, maxTaps: 1023))
-            } else {
-                stereo = nil
-                rds = nil
-                stage2 = rates.decim2 > 1
-                    ? ComplexDecimator(factor: rates.decim2,
-                                       taps: FIR.lowpass(cutoff: 0.44 * ra / r1, transition: 0.14 * ra / r1, maxTaps: 1023))
-                    : ComplexDecimator(factor: 1, taps: [1])
-            }
-            fm = FMDemodulator()
-            agc = AGC(sampleRate: ra)
-            dcBlock = DCBlocker(cutoff: 40, sampleRate: ra)
-            nfmAudio = NFMAudio(sampleRate: ra)
-            rade = c.mode == .rade ? RADEDecoder(rate: ra) : nil
-            squelchDelay = DelayLine(delay: c.mode == .nfm ? Int(0.02 * ra) : 0)
-            mixer = Mixer()
-            cwMixer = Mixer()
-            envM2 = 0
-            envM4 = 0
-            snrDB = -20
-            audioRing.reset(sampleRate: ra)
+            receivers.forEach { $0.reset() }
+            for k in pending.indices { pending[k].removeAll() }
+            silenceDebt = 0
+            audioRing.reset(sampleRate: rates.audioRate)
             if recorder.isRecordingAudio { recorder.stopAudio() }
         }
-        if structural || previous!.bandwidth != c.bandwidth || previous!.radeLSB != c.radeLSB {
-            buildChannelFilter(c)
-        }
-        if structural {
-            notch = AutoNotch(sampleRate: rates.audioRate)
-        } else if previous!.autoNotch != c.autoNotch {
-            notch.reset()
-        }
-        if structural || previous!.deemphasis != c.deemphasis {
-            let tau = (c.mode == .wfm) ? c.deemphasis : 0
-            deemphL = Deemphasis(tau: tau, sampleRate: rates.audioRate)
-            deemphR = Deemphasis(tau: tau, sampleRate: rates.audioRate)
-        }
-        if structural || previous!.fftSize != c.fftSize {
+        if previous == nil || previous!.sampleRate != c.sampleRate || previous!.fftSize != c.fftSize {
             analyzer = SpectrumAnalyzer(size: c.fftSize)
             averaged = []
             peak = []
             waterfallSum = []
             waterfallCount = 0
-        }
-    }
-
-    private func buildChannelFilter(_ c: DSPConfig) {
-        let range = c.mode.bandwidthRange
-        if c.mode == .wfm {
-            let r1 = rates.rate1
-            let bw = min(max(c.bandwidth, range.lowerBound), min(range.upperBound, 0.92 * r1))
-            channel = FFTFilter(realTaps: FIR.lowpass(cutoff: bw / 2 / r1, transition: 25_000 / r1, maxTaps: 511))
-        } else {
-            let ra = rates.audioRate
-            let bw = min(max(c.bandwidth, range.lowerBound), 0.84 * ra)
-            let edges = c.mode.filterEdges(bandwidth: bw, lsb: c.radeLSB)
-            let lo = max(edges.lo, -0.45 * ra), hi = min(edges.hi, 0.45 * ra)
-            let transition = max(60, 0.1 * bw) / ra
-            if lo == -hi {
-                channel = FFTFilter(realTaps: FIR.lowpass(cutoff: hi / ra, transition: transition, maxTaps: 2047))
-            } else {
-                let taps = FIR.complexBandpass(lo: lo / ra, hi: hi / ra, transition: transition, maxTaps: 2047)
-                channel = FFTFilter(tapsRe: taps.re, tapsIm: taps.im)
-            }
         }
     }
 
@@ -267,6 +173,10 @@ public final class DSPEngine: @unchecked Sendable {
             built = true
         } else if c != cfg {
             rebuild(c, previous: cfg)
+        }
+        if c.vfoB == nil && cfg.vfoB != nil {
+            receivers[1].reset()
+            pending[1].removeAll()
         }
         cfg = c
 
@@ -318,103 +228,34 @@ public final class DSPEngine: @unchecked Sendable {
                 if c.dcCorrection { removeDC(i, q, n) }
                 analyzer.push(re: i, im: q, count: n)
                 spectrumStep(n, c)
-                mixer.mix(re: i, im: q, count: n, frequency: c.vfoOffset, sampleRate: c.sampleRate)
             }
         }
 
-        let n1 = bufI.withUnsafeBufferPointer { i in
-            bufQ.withUnsafeBufferPointer { q in stage1.process(i: i.baseAddress!, q: q.baseAddress!, count: n) }
-        }
-        guard n1 > 0 else { return }
-
-        let audioCount: Int
-        var levelDB: Float = -150
-        if c.mode == .wfm {
-            let nc = stage1.outI.withUnsafeBufferPointer { i in
-                stage1.outQ.withUnsafeBufferPointer { q in channel.process(re: i.baseAddress!, im: q.baseAddress!, count: n1) }
+        // Receivers.
+        let configs = [c.vfoA, c.vfoB]
+        var active: [Int] = []
+        for k in 0..<2 {
+            guard let rc = configs[k] else { continue }
+            let receiver = receivers[k]
+            guard abs(rc.vfoOffset) <= c.sampleRate * DSPEngine.usableFraction else {
+                receiver.markOutOfBand()
+                pending[k].removeAll()
+                continue
             }
-            guard nc > 0 else { return }
-            levelDB = channelPower(nc)
-            updateSNR(from: 0, count: nc, rate: rates.rate1)
-            ensure(&demod, nc)
-            let gain = Float(rates.rate1 / (2 * .pi * 75_000))
-            channel.outRe.withUnsafeBufferPointer { re in
-                channel.outIm.withUnsafeBufferPointer { im in
-                    fm.process(re: re.baseAddress!, im: im.baseAddress!, count: nc, gain: gain, output: &demod)
+            active.append(k)
+            let count = bufI.withUnsafeBufferPointer { i in
+                bufQ.withUnsafeBufferPointer { q in
+                    receiver.process(i: i.baseAddress!, q: q.baseAddress!, count: n, config: rc, global: c)
                 }
             }
-            if configLock.withLock({ let r = rdsResetPending; rdsResetPending = false; return r }) {
-                rds?.reset()
-            }
-            if c.rds, let rds {
-                demod.withUnsafeBufferPointer { rds.process(mpx: $0.baseAddress!, count: nc) }
-            }
-            if let stereo {
-                audioCount = stereo.process(mpx: demod, count: nc, stereoEnabled: c.stereo)
-                ensure(&left, audioCount)
-                ensure(&right, audioCount)
-                left.withUnsafeMutableBufferPointer { $0.baseAddress!.update(from: stereo.left, count: audioCount) }
-                right.withUnsafeMutableBufferPointer { $0.baseAddress!.update(from: stereo.right, count: audioCount) }
-            } else {
-                audioCount = monoDecimator.process(demod, count: nc)
-                ensure(&left, audioCount)
-                ensure(&right, audioCount)
-                left.withUnsafeMutableBufferPointer { $0.baseAddress!.update(from: monoDecimator.output, count: audioCount) }
-                right.withUnsafeMutableBufferPointer { $0.baseAddress!.update(from: monoDecimator.output, count: audioCount) }
-            }
-            left.withUnsafeMutableBufferPointer { deemphL.process($0.baseAddress!, count: audioCount) }
-            right.withUnsafeMutableBufferPointer { deemphR.process($0.baseAddress!, count: audioCount) }
-        } else {
-            let n2 = stage1.outI.withUnsafeBufferPointer { i in
-                stage1.outQ.withUnsafeBufferPointer { q in stage2.process(i: i.baseAddress!, q: q.baseAddress!, count: n1) }
-            }
-            guard n2 > 0 else { return }
-            let nc = stage2.outI.withUnsafeBufferPointer { i in
-                stage2.outQ.withUnsafeBufferPointer { q in channel.process(re: i.baseAddress!, im: q.baseAddress!, count: n2) }
-            }
-            guard nc > 0 else { return }
-            levelDB = channelPower(nc)
-            ensure(&left, nc)
-            ensure(&right, nc)
-            demodulateNarrow(nc, c)
-            if c.mode == .nfm {
-                // Delay the audio, not the squelch decision, so the mute lands before the noise burst
-                // that the SNR estimate takes a few milliseconds to notice.
-                left.withUnsafeBufferPointer { squelchDelay.process($0.baseAddress!, count: nc) }
-                left.withUnsafeMutableBufferPointer { $0.baseAddress!.update(from: squelchDelay.output, count: nc) }
-            }
-            audioCount = nc
-            right.withUnsafeMutableBufferPointer { r in left.withUnsafeBufferPointer { r.baseAddress!.update(from: $0.baseAddress!, count: nc) } }
+            pending[k].append(left: receiver.left, right: receiver.right, count: count)
         }
-
-        // Squelch. NFM decides every 5 ms (its channel samples run at the audio rate), so the noise burst at
-        // the end of a transmission is cut within a few milliseconds; the rest decide once per block.
-        // Transitions fade over 5 ms to avoid clicks.
-        let isFM = c.mode == .wfm || c.mode == .nfm
-        let fadeStep = Float(1 / (0.005 * rates.audioRate))
-        if c.mode == .nfm {
-            let step = max(1, Int(0.005 * rates.audioRate))
-            var start = 0
-            while start < audioCount {
-                let len = min(step, audioCount - start)
-                updateSNR(from: start, count: len, rate: rates.audioRate)
-                let audible = updateSquelch(c, levelDB: levelDB, duration: Double(len) / rates.audioRate)
-                applySquelchGain(from: start, count: len, target: audible ? 1 : 0, step: fadeStep)
-                start += len
-            }
-        } else {
-            let audible = updateSquelch(c, levelDB: levelDB, duration: Double(audioCount) / rates.audioRate)
-            applySquelchGain(from: 0, count: audioCount, target: audible ? 1 : 0, step: fadeStep)
+        // A receiver can only run ahead while another fills its first blocks; never let that grow.
+        let limit = Int(0.25 * rates.audioRate)
+        for k in active where pending[k].count > limit + (active.map { pending[$0].count }.min() ?? 0) {
+            pending[k].removeFirst(pending[k].count - limit)
         }
-
-        recorder.writeAudio(left: left, right: right, count: audioCount)
-
-        ensure(&outL, audioCount)
-        ensure(&outR, audioCount)
-        var vol = c.muted ? 0 : c.volume
-        vDSP_vsmul(left, 1, &vol, &outL, 1, vDSP_Length(audioCount))
-        vDSP_vsmul(right, 1, &vol, &outR, 1, vDSP_Length(audioCount))
-        audioRing.write(left: outL, right: outR, count: audioCount)
+        mixAudio(active: active, configs: configs, inputCount: n)
 
         rateCounter += n
         let now = DispatchTime.now().uptimeNanoseconds
@@ -424,24 +265,71 @@ public final class DSPEngine: @unchecked Sendable {
             rateCounter = 0
             rateStart = now
         }
-        let agcGain = agc.currentGainDB
-        let locked = stereo?.locked ?? false
-        let rdsInfo = c.mode == .wfm && c.rds ? rds?.info : nil
-        let radeStatus = rade?.status
-        let open = squelchOpen
-        let snr: Float? = isFM ? snrDB : nil
+        let statusA = receivers[0].status
+        let statusB = c.vfoB != nil ? receivers[1].status : nil
         let audioRate = rates.audioRate
         statusLock.withLock {
-            currentStatus.levelDB = levelDB
-            currentStatus.squelchOpen = open
-            currentStatus.snrDB = snr
-            currentStatus.stereoLocked = locked && c.mode == .wfm
+            currentStatus.vfoA = statusA
+            currentStatus.vfoB = statusB
             currentStatus.audioRate = audioRate
-            currentStatus.agcGainDB = agcGain
             currentStatus.overload = overload
             if let measuredRate { currentStatus.samplesPerSecond = measuredRate }
-            currentStatus.rds = rdsInfo ?? RDSInfo()
-            currentStatus.rade = radeStatus
+        }
+    }
+
+    /// Mixes what all in-band receivers have ready (each routed to its channels) into the recorder and the
+    /// audio ring. Recording gets the mix without volume, the speakers with it; a muted VFO is left out of both.
+    private func mixAudio(active: [Int], configs: [ReceiverConfig?], inputCount n: Int) {
+        let count: Int
+        if active.isEmpty {
+            silenceDebt += Double(n) * rates.audioRate / cfg.sampleRate
+            count = Int(silenceDebt)
+            silenceDebt -= Double(count)
+        } else {
+            silenceDebt = 0
+            count = active.map { pending[$0].count }.min()!
+        }
+        guard count > 0 else { return }
+        ensure(&mixL, count)
+        ensure(&mixR, count)
+        ensure(&outL, count)
+        ensure(&outR, count)
+        vDSP_vclr(&mixL, 1, vDSP_Length(count))
+        vDSP_vclr(&mixR, 1, vDSP_Length(count))
+        vDSP_vclr(&outL, 1, vDSP_Length(count))
+        vDSP_vclr(&outR, 1, vDSP_Length(count))
+        for k in active {
+            let rc = configs[k]!
+            if !rc.muted {
+                pending[k].withBuffers { l, r in
+                    add(l, r, route: rc.output, gain: 1, count: count, intoLeft: &mixL, intoRight: &mixR)
+                    add(l, r, route: rc.output, gain: rc.volume, count: count, intoLeft: &outL, intoRight: &outR)
+                }
+            }
+            pending[k].removeFirst(count)
+        }
+        recorder.writeAudio(left: mixL, right: mixR, count: count)
+        audioRing.write(left: outL, right: outR, count: count)
+    }
+
+    private func add(_ l: UnsafePointer<Float>, _ r: UnsafePointer<Float>, route: AudioRoute, gain: Float, count: Int,
+                     intoLeft outL: inout [Float], intoRight outR: inout [Float]) {
+        var g = gain
+        let len = vDSP_Length(count)
+        switch route {
+        case .both:
+            outL.inPlace { vDSP_vsma(l, 1, &g, $0, 1, $0, 1, len) }
+            outR.inPlace { vDSP_vsma(r, 1, &g, $0, 1, $0, 1, len) }
+        case .left, .right:
+            // Mono to one side.
+            var half = gain / 2
+            if route == .left {
+                outL.inPlace { vDSP_vsma(l, 1, &half, $0, 1, $0, 1, len) }
+                outL.inPlace { vDSP_vsma(r, 1, &half, $0, 1, $0, 1, len) }
+            } else {
+                outR.inPlace { vDSP_vsma(l, 1, &half, $0, 1, $0, 1, len) }
+                outR.inPlace { vDSP_vsma(r, 1, &half, $0, 1, $0, 1, len) }
+            }
         }
     }
 
@@ -456,127 +344,6 @@ public final class DSPEngine: @unchecked Sendable {
         var ni = -dcI, nq = -dcQ
         vDSP_vsadd(i, 1, &ni, i, 1, vDSP_Length(n))
         vDSP_vsadd(q, 1, &nq, q, 1, vDSP_Length(n))
-    }
-
-    private func channelPower(_ n: Int) -> Float {
-        var pr: Float = 0, pi: Float = 0
-        vDSP_measqv(channel.outRe, 1, &pr, vDSP_Length(n))
-        vDSP_measqv(channel.outIm, 1, &pi, vDSP_Length(n))
-        return 10 * log10f(max(pr + pi, 1e-15))
-    }
-
-    /// Carrier-to-noise estimate from the envelope moments of the channel output (M2M4 estimator).
-    /// An FM carrier has a constant envelope, noise a Rayleigh one, so this works at any signal level.
-    /// Updates `squelchOpen` and returns whether audio should pass. Level squelch: 3 dB hysteresis. Auto (FM):
-    /// open above 6 dB C/N. Below 3 dB the audio mutes at once, while the squelch itself stays open for a short
-    /// hang so a brief fade doesn't close it; audio returns as soon as the signal does.
-    private func updateSquelch(_ c: DSPConfig, levelDB: Float, duration: Double) -> Bool {
-        guard c.squelchEnabled else {
-            squelchOpen = true
-            return true
-        }
-        if c.squelchAuto && (c.mode == .wfm || c.mode == .nfm) {
-            if snrDB > 6 {
-                squelchOpen = true
-                squelchHang = 0.15
-                return true
-            }
-            if snrDB < 3 {
-                squelchHang -= duration
-                if squelchHang <= 0 { squelchOpen = false }
-                return false
-            }
-            return squelchOpen
-        }
-        squelchOpen = squelchOpen ? levelDB > c.squelchLevel - 3 : levelDB > c.squelchLevel
-        return squelchOpen
-    }
-
-    private func applySquelchGain(from start: Int, count: Int, target: Float, step: Float) {
-        var g = squelchGain
-        left.withUnsafeMutableBufferPointer { l in
-            right.withUnsafeMutableBufferPointer { r in
-                if g == target {
-                    if target == 0 {
-                        (l.baseAddress! + start).update(repeating: 0, count: count)
-                        (r.baseAddress! + start).update(repeating: 0, count: count)
-                    }
-                    return
-                }
-                for k in start..<(start + count) {
-                    g = target > g ? min(target, g + step) : max(target, g - step)
-                    l[k] *= g
-                    r[k] *= g
-                }
-            }
-        }
-        squelchGain = g
-    }
-
-    private func updateSNR(from start: Int, count n: Int, rate: Double) {
-        ensure(&mags, n)
-        channel.outRe.withUnsafeBufferPointer { rp in
-            channel.outIm.withUnsafeBufferPointer { ip in
-                var split = DSPSplitComplex(realp: UnsafeMutablePointer(mutating: rp.baseAddress! + start),
-                                            imagp: UnsafeMutablePointer(mutating: ip.baseAddress! + start))
-                vDSP_zvmags(&split, 1, &mags, 1, vDSP_Length(n))
-            }
-        }
-        var m2: Float = 0, m4: Float = 0
-        vDSP_meanv(mags, 1, &m2, vDSP_Length(n))
-        vDSP_measqv(mags, 1, &m4, vDSP_Length(n))
-        // Average the moments over ~30 ms; they are normalised by M2² below, so level changes cancel.
-        let a = envM2 == 0 ? 1 : 1 - exp(-Double(n) / rate / 0.03)
-        envM2 += a * (Double(m2) - envM2)
-        envM4 += a * (Double(m4) - envM4)
-        guard envM2 > 0 else { return }
-        let s = (max(0, 2 * envM2 * envM2 - envM4)).squareRoot()
-        let noise = max(envM2 - s, 1e-12)
-        snrDB = Float(10 * log10(max(s / noise, 1e-3)))
-    }
-
-    private func demodulateNarrow(_ n: Int, _ c: DSPConfig) {
-        let ra = rates.audioRate
-        let useNotch = c.autoNotch && c.mode.supportsAutoNotch
-        let edges = c.mode.filterEdges(bandwidth: c.bandwidth, lsb: c.radeLSB)
-        let notchMax = max(abs(edges.lo), abs(edges.hi))
-        left.withUnsafeMutableBufferPointer { lp in
-            let out = lp.baseAddress!
-            channel.outRe.withUnsafeBufferPointer { rp in
-                channel.outIm.withUnsafeBufferPointer { ip in
-                    let re = rp.baseAddress!, im = ip.baseAddress!
-                    switch c.mode {
-                    case .am:
-                        var split = DSPSplitComplex(realp: UnsafeMutablePointer(mutating: re), imagp: UnsafeMutablePointer(mutating: im))
-                        vDSP_zvabs(&split, 1, out, 1, vDSP_Length(n))
-                        dcBlock.process(out, count: n)
-                        if useNotch { notch.process(out, count: n, maxFrequency: notchMax) }
-                        agc.process(out, count: n, mode: c.agcMode, manualGainDB: c.afGainDB)
-                    case .nfm:
-                        // Full scale at the channel's nominal peak deviation (bandwidth / 5: 2.5 kHz in a
-                        // 12.5 kHz channel, 5 kHz in 25 kHz).
-                        let deviation = c.bandwidth / 5
-                        fm.process(re: re, im: im, count: n, gain: Float(ra / (2 * .pi * deviation)), output: out)
-                        nfmAudio.process(out, count: n)
-                    case .usb, .lsb, .dsb:
-                        out.update(from: re, count: n)
-                        if useNotch { notch.process(out, count: n, maxFrequency: notchMax) }
-                        agc.process(out, count: n, mode: c.agcMode, manualGainDB: c.afGainDB)
-                    case .cw:
-                        // Shift the carrier up to the CW pitch, then take the real part.
-                        let mre = UnsafeMutablePointer(mutating: re), mim = UnsafeMutablePointer(mutating: im)
-                        cwMixer.mix(re: mre, im: mim, count: n, frequency: -c.cwPitch, sampleRate: ra)
-                        out.update(from: re, count: n)
-                        agc.process(out, count: n, mode: c.agcMode, manualGainDB: c.afGainDB)
-                    case .rade:
-                        // The vocoder's output has a fixed level, so no AGC.
-                        rade?.process(re: re, im: im, count: n, lsb: c.radeLSB, output: out)
-                    case .wfm:
-                        break
-                    }
-                }
-            }
-        }
     }
 
     private func spectrumStep(_ n: Int, _ c: DSPConfig) {
@@ -618,4 +385,37 @@ public final class DSPEngine: @unchecked Sendable {
             waterfallCount = 0
         }
     }
+}
+
+/// Stereo audio waiting to be mixed.
+struct AudioFIFO {
+    private var left: [Float] = []
+    private var right: [Float] = []
+    private(set) var count = 0
+
+    mutating func append(left l: [Float], right r: [Float], count n: Int) {
+        guard n > 0 else { return }
+        if left.count < count + n {
+            left.append(contentsOf: [Float](repeating: 0, count: count + n - left.count))
+            right.append(contentsOf: [Float](repeating: 0, count: count + n - right.count))
+        }
+        left.withUnsafeMutableBufferPointer { $0.baseAddress!.advanced(by: count).update(from: l, count: n) }
+        right.withUnsafeMutableBufferPointer { $0.baseAddress!.advanced(by: count).update(from: r, count: n) }
+        count += n
+    }
+
+    func withBuffers(_ body: (UnsafePointer<Float>, UnsafePointer<Float>) -> Void) {
+        left.withUnsafeBufferPointer { l in right.withUnsafeBufferPointer { r in body(l.baseAddress!, r.baseAddress!) } }
+    }
+
+    mutating func removeFirst(_ n: Int) {
+        let rest = count - n
+        if rest > 0 {
+            left.withUnsafeMutableBufferPointer { $0.baseAddress!.update(from: $0.baseAddress! + n, count: rest) }
+            right.withUnsafeMutableBufferPointer { $0.baseAddress!.update(from: $0.baseAddress! + n, count: rest) }
+        }
+        count = rest
+    }
+
+    mutating func removeAll() { count = 0 }
 }

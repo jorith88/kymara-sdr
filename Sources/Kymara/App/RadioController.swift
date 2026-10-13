@@ -564,22 +564,22 @@ final class RadioController {
     private func pushConfig() {
         var c = DSPConfig()
         c.sampleRate = sampleRate
-        c.vfoOffset = vfoFrequency - centerFrequency
-        c.mode = mode
-        c.bandwidth = bandwidth
-        c.squelchEnabled = squelchEnabled
-        c.squelchLevel = Float(squelchLevel)
-        c.squelchAuto = squelchAuto
-        c.agcMode = agcMode
-        c.afGainDB = Float(afGain)
-        c.autoNotch = autoNotch
-        c.radeLSB = radeLSB
+        c.vfoA.vfoOffset = vfoFrequency - centerFrequency
+        c.vfoA.mode = mode
+        c.vfoA.bandwidth = bandwidth
+        c.vfoA.squelchEnabled = squelchEnabled
+        c.vfoA.squelchLevel = Float(squelchLevel)
+        c.vfoA.squelchAuto = squelchAuto
+        c.vfoA.agcMode = agcMode
+        c.vfoA.afGainDB = Float(afGain)
+        c.vfoA.autoNotch = autoNotch
+        c.vfoA.radeLSB = radeLSB
         // Perceptual volume curve.
-        c.volume = Float(volume * volume)
-        c.muted = muted
+        c.vfoA.volume = Float(volume * volume)
+        c.vfoA.muted = muted
         c.deemphasis = deemphasis.tau
-        c.stereo = stereoEnabled
-        c.rds = rdsEnabled
+        c.vfoA.stereo = stereoEnabled
+        c.vfoA.rds = rdsEnabled
         c.cwPitch = cwPitch
         c.dcCorrection = dcCorrection
         c.swapIQ = swapIQ
@@ -595,15 +595,15 @@ final class RadioController {
     private func updateMeter() {
         guard isRunning else { return }
         let s = engine.status
-        let level = Double(s.levelDB)
+        let level = Double(s.vfoA.levelDB)
         // Fast attack, slow release, like an analogue meter.
         signalDB = level > signalDB ? signalDB + (level - signalDB) * 0.6 : signalDB + (level - signalDB) * 0.12
         signalPeakDB = max(signalPeakDB - 0.25, signalDB)
-        if squelchOpen != s.squelchOpen { squelchOpen = s.squelchOpen }
-        let snr = s.snrDB.map { Double($0.rounded()) }
+        if squelchOpen != s.vfoA.squelchOpen { squelchOpen = s.vfoA.squelchOpen }
+        let snr = s.vfoA.snrDB.map { Double($0.rounded()) }
         if snrDB != snr { snrDB = snr }
-        if stereoLocked != s.stereoLocked { stereoLocked = s.stereoLocked }
-        let radeStatus = s.rade.map { r in
+        if stereoLocked != s.vfoA.stereoLocked { stereoLocked = s.vfoA.stereoLocked }
+        let radeStatus = s.vfoA.rade.map { r in
             var r = r
             r.snrDB = r.snrDB.rounded()
             r.frequencyOffset = r.frequencyOffset.rounded()
@@ -612,7 +612,7 @@ final class RadioController {
         if rade != radeStatus { rade = radeStatus }
         // The count restarts at 0 when the engine builds a new decoder, so any change to a non-zero count is news.
         var heardCallsign: String?
-        if let s = s.rade, s.callsignCount != radeCallsignCount {
+        if let s = s.vfoA.rade, s.callsignCount != radeCallsignCount {
             if s.callsignCount > 0, let call = s.callsign, !call.isEmpty {
                 radeCallsign = call
                 heardCallsign = call
@@ -621,14 +621,14 @@ final class RadioController {
         }
         // File and demo sources aren't on the air: reporting them would put false reports on the map.
         reporter.update(active: mode == .rade && sourceKind != .file && sourceKind != .demo, frequency: vfoFrequency)
-        if let r = s.rade, heardCallsign != nil || r.sync {
+        if let r = s.vfoA.rade, heardCallsign != nil || r.sync {
             reporter.heard(callsign: heardCallsign, snr: r.snrDB)
         }
         let isOverloaded = s.overload || (source?.hardwareOverload ?? false)
         if overload != isOverloaded { overload = isOverloaded }
         sdrplayGainDB = (source as? SDRplaySource)?.systemGainDB
         meterTick &+= 1
-        if meterTick % 5 == 0, s.rds != rds { rds = s.rds }
+        if meterTick % 5 == 0, s.vfoA.rds != rds { rds = s.vfoA.rds }
         if meterTick % 15 == 0 {
             audioLatency = engine.audioRing.latency
             measuredRate = s.samplesPerSecond

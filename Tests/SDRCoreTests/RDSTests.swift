@@ -102,18 +102,43 @@ final class DemoRDSTests: XCTestCase {
         let engine = DSPEngine()
         var c = DSPConfig()
         c.sampleRate = 2_400_000
-        c.mode = .wfm
-        c.vfoOffset = 300_000
+        c.vfoA.mode = .wfm
+        c.vfoA.vfoOffset = 300_000
         engine.config = c
         try src.start(sampleRate: 2_400_000, centerFrequency: 99_700_000) { engine.process($0) }
         var info = RDSInfo()
         for _ in 0..<40 {
             Thread.sleep(forTimeInterval: 0.1)
-            info = engine.status.rds
+            info = engine.status.vfoA.rds
             if info.trimmedProgramService == "KYMARA" { break }
         }
         src.stop()
         XCTAssertEqual(info.piHex, "8201")
         XCTAssertEqual(info.programService, "KYMARA  ")
+    }
+
+    func testBothVFOsDecodeRDS() throws {
+        let src = DemoSource()
+        let engine = DSPEngine()
+        var c = DSPConfig()
+        c.sampleRate = 2_400_000
+        c.vfoA.mode = .wfm
+        c.vfoA.vfoOffset = -400_000
+        var b = c.vfoA
+        b.vfoOffset = 800_000
+        c.vfoB = b
+        engine.config = c
+        try src.start(sampleRate: 2_400_000, centerFrequency: 100_400_000) { engine.process($0) }
+        var a = RDSInfo(), bInfo = RDSInfo()
+        for _ in 0..<60 {
+            Thread.sleep(forTimeInterval: 0.1)
+            a = engine.status.vfoA.rds
+            bInfo = engine.status.vfoB?.rds ?? RDSInfo()
+            if a.trimmedProgramService == "KYMARA" && bInfo.trimmedProgramService == "DEMO 2" { break }
+        }
+        src.stop()
+        XCTAssertEqual(a.piHex, "8201")
+        XCTAssertEqual(bInfo.piHex, "8202")
+        XCTAssertEqual(bInfo.trimmedProgramService, "DEMO 2")
     }
 }

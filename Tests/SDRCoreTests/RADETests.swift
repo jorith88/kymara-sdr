@@ -129,11 +129,11 @@ final class RADETests: XCTestCase {
         let engine = DSPEngine()
         var c = DSPConfig()
         c.sampleRate = 240_000
-        c.vfoOffset = 30_000
-        c.mode = .rade
-        c.radeLSB = lsb
-        c.bandwidth = DemodMode.rade.defaultBandwidth
-        c.volume = 1
+        c.vfoA.vfoOffset = 30_000
+        c.vfoA.mode = .rade
+        c.vfoA.radeLSB = lsb
+        c.vfoA.bandwidth = DemodMode.rade.defaultBandwidth
+        c.vfoA.volume = 1
         engine.config = c
         var audioOut: [Float] = []
         var tmpL = [Float](repeating: 0, count: 256), tmpR = tmpL
@@ -144,13 +144,13 @@ final class RADETests: XCTestCase {
             let end = min(iq.count, pos + chunk)
             iq.withUnsafeBufferPointer { engine.process(.s16(UnsafeBufferPointer(rebasing: $0[pos..<end]))) }
             pos = end
-            if engine.status.rade?.sync == true { everSynced = true }
+            if engine.status.vfoA.rade?.sync == true { everSynced = true }
             while engine.audioRing.latency > 0.09 {
                 engine.audioRing.read(left: &tmpL, right: &tmpR, count: 256)
                 audioOut += tmpL
             }
         }
-        return (everSynced, audioOut, engine.status.audioRate, engine.status.rade?.callsign)
+        return (everSynced, audioOut, engine.status.audioRate, engine.status.vfoA.rade?.callsign)
     }
 
     /// The whole chain, in both sidebands. The wrong sideband sees a mirrored signal and must not sync.
