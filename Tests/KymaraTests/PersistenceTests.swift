@@ -54,6 +54,34 @@ final class PersistenceTests: XCTestCase {
         XCTAssertEqual(m?.mode, .lsb)
     }
 
+    func testVFOBRoundTrip() {
+        var s = RadioSettings()
+        var b = VFOState()
+        b.frequency = 101_200_000
+        b.mode = .nfm
+        b.output = .right
+        b.squelchEnabled = true
+        s.vfoB = b
+        s.vfoBEnabled = true
+        s.selectedVFO = .b
+        s.output = .left
+        store.saveSettings(s)
+        let loaded = store.loadSettings()
+        XCTAssertEqual(loaded?.vfoB, b)
+        XCTAssertEqual(loaded?.vfoBEnabled, true)
+        XCTAssertEqual(loaded?.selectedVFO, .b)
+        XCTAssertEqual(loaded?.output, .left)
+
+        // Settings from before VFO B: B is off, A is untouched; a broken B keeps the rest.
+        storeRawSettings(#"{"vfo": 7100000, "mode": "LSB", "vfoB": {"frequency": "x", "mode": "USB"}}"#)
+        let old = store.loadSettings()
+        XCTAssertEqual(old?.vfo, 7_100_000)
+        XCTAssertEqual(old?.vfoBEnabled, false)
+        XCTAssertEqual(old?.selectedVFO, .a)
+        XCTAssertEqual(old?.vfoB?.mode, .usb)
+        XCTAssertEqual(old?.vfoB?.frequency, VFOState().frequency)
+    }
+
     func testMissingFieldsKeepTheRest() {
         // Simulates settings written by an older version that lacked most fields.
         storeRawSettings(#"{"vfo": 7100000, "mode": "LSB"}"#)

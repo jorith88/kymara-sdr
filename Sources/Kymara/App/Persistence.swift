@@ -45,6 +45,11 @@ struct RadioSettings: Codable {
     var biasTee = false
     var offsetTuning = false
     var volume: Double = 0.5
+    /// VFO A's audio route. The flat tuning and demodulation fields are VFO A's.
+    var output: AudioRoute = .both
+    var vfoB: VFOState? = nil
+    var vfoBEnabled = false
+    var selectedVFO: VFOID = .a
     var squelchEnabled = false
     var squelchLevel: Double = -50
     var squelchAuto = false
@@ -110,6 +115,10 @@ extension RadioSettings {
         read(.biasTee, &biasTee)
         read(.offsetTuning, &offsetTuning)
         read(.volume, &volume)
+        read(.output, &output)
+        vfoB = c.lenient(VFOState.self, .vfoB)
+        read(.vfoBEnabled, &vfoBEnabled)
+        read(.selectedVFO, &selectedVFO)
         read(.squelchEnabled, &squelchEnabled)
         read(.squelchLevel, &squelchLevel)
         read(.squelchAuto, &squelchAuto)
