@@ -6,14 +6,19 @@ public final class RTLTCPSource: IQSource, @unchecked Sendable {
     public let host: String
     public let port: UInt16
     public var displayName: String { "rtl_tcp \(host):\(port)" + (tunerName.isEmpty ? "" : " · \(tunerName)") }
-    public private(set) var gains: [Int] = TunerGains.r820t
-    public private(set) var tunerName = ""
+    public var gains: [Int] { tunerLock.withLock { tunerGains } }
+    public var tunerName: String { tunerLock.withLock { tuner } }
     public var onError: ((String) -> Void)?
     public var onInfoChanged: (() -> Void)?
 
     /// All connection and stream state below is only touched on this queue.
     private let queue = DispatchQueue(label: "rtl_tcp", qos: .userInteractive)
     private let queueKey = DispatchSpecificKey<Void>()
+    /// Guards the tuner info from the header, which is written on `queue` and read on the main thread; a lock
+    /// rather than `queue`, so the getters never wait behind network work.
+    private let tunerLock = NSLock()
+    private var tuner = ""
+    private var tunerGains = TunerGains.r820t
     private var connection: NWConnection?
     private var handler: IQHandler?
     private var headerBytes = Data()
@@ -164,8 +169,10 @@ public final class RTLTCPSource: IQSource, @unchecked Sendable {
         let bytes = [UInt8](headerBytes)
         guard bytes.count == 12, bytes[0] == 0x52, bytes[1] == 0x54, bytes[2] == 0x4c, bytes[3] == 0x30 else { return }
         let type = Int(UInt32(bytes[4]) << 24 | UInt32(bytes[5]) << 16 | UInt32(bytes[6]) << 8 | UInt32(bytes[7]))
-        tunerName = TunerGains.tunerName(type)
-        gains = TunerGains.forTunerType(type)
+        tunerLock.withLock {
+            tuner = TunerGains.tunerName(type)
+            tunerGains = TunerGains.forTunerType(type)
+        }
         onInfoChanged?()
     }
 

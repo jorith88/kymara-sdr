@@ -2,13 +2,13 @@ import XCTest
 import Network
 @testable import SDRCore
 
-/// A local rtl_tcp server: sends the 12-byte header (R820T), then streams I/Q bytes as fast as the client reads.
+/// A local rtl_tcp server: sends the 12-byte header (R820T unless told otherwise), then streams I/Q bytes as fast as the client reads.
 private final class FakeRTLTCPServer {
     private let listener: NWListener
     private let queue = DispatchQueue(label: "fake rtl_tcp")
     private(set) var port: UInt16 = 0
 
-    init() throws {
+    init(tunerType: UInt8 = 5) throws {
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
         listener = try NWListener(using: parameters)
@@ -18,7 +18,7 @@ private final class FakeRTLTCPServer {
         }
         listener.newConnectionHandler = { [queue] conn in
             conn.start(queue: queue)
-            let header = Data([0x52, 0x54, 0x4c, 0x30, 0, 0, 0, 5, 0, 0, 0, 29])
+            let header = Data([0x52, 0x54, 0x4c, 0x30, 0, 0, 0, tunerType, 0, 0, 0, 29])
             conn.send(content: header, completion: .contentProcessed { _ in })
             Self.stream(conn, Data(repeating: 127, count: 1 << 16))
             Self.discardCommands(conn)
@@ -84,5 +84,19 @@ final class RTLTCPSourceTests: XCTestCase {
         XCTAssertEqual(src.tunerName, "R820T/R860")
         RunLoop.main.run(until: Date() + 0.1)
         XCTAssertEqual(errors, [])
+    }
+
+    /// The tuner info from the header is readable from another thread once onInfoChanged fires.
+    func testTunerInfoFromHeader() throws {
+        let server = try FakeRTLTCPServer(tunerType: 1)
+        let src = RTLTCPSource(host: "127.0.0.1", port: server.port)
+        let info = DispatchSemaphore(value: 0)
+        src.onInfoChanged = { info.signal() }
+        try src.start(sampleRate: 2_400_000, centerFrequency: 100_000_000) { _ in }
+        defer { src.stop() }
+        XCTAssertEqual(info.wait(timeout: .now() + 5), .success)
+        XCTAssertEqual(src.tunerName, "E4000")
+        XCTAssertEqual(src.gains, TunerGains.e4000)
+        XCTAssertEqual(src.displayName, "rtl_tcp 127.0.0.1:\(server.port) · E4000")
     }
 }
