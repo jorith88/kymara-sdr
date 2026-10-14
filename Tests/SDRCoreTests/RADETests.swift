@@ -56,13 +56,22 @@ final class RADETests: XCTestCase {
     }
 
     /// Feeds a fixture (as a real USB signal at 48 kHz) to a decoder; returns the decoder, the speech and
-    /// whether and how well it synced.
-    private func decode(_ fixture: String, version: Int)
+    /// whether and how well it synced. `poisoned` first feeds a block containing NaN and infinity.
+    private func decode(_ fixture: String, version: Int, poisoned: Bool = false)
         throws -> (decoder: RADEDecoder, speech: [Float], synced: Bool, bestSNR: Float, rate: Double) {
         let rate = 48_000.0
         let x = upsample(try loadFixture(fixture), from: 8_000, to: rate)
         let zeros = [Float](repeating: 0, count: x.count)
         let decoder = RADEDecoder(rate: rate, version: version)
+        if poisoned {
+            var re = [Float](repeating: 0.1, count: 960)
+            var im = [Float](repeating: 0, count: 960)
+            re[100] = .nan
+            im[200] = .infinity
+            re[300] = -.infinity
+            var out = [Float](repeating: 0, count: 960)
+            decoder.process(re: &re, im: &im, count: 960, output: &out)
+        }
         var speech = [Float](repeating: 0, count: x.count)
         var everSynced = false
         var bestSNR: Float = -100
@@ -116,6 +125,18 @@ final class RADETests: XCTestCase {
         XCTAssertGreaterThan(during, 0.02, "speech while in sync")
         XCTAssertFalse(decoder.status.sync, "end of over")
         XCTAssertLessThan(rms(speech[(12 * r)...]), during * 0.01, "silence after the over")
+    }
+
+    /// A non-finite sample (a glitch upstream) must not stop the decoder for good: rade_c's V2 receiver never
+    /// recovers from NaN input, and the input level tracking would stay NaN.
+    func testRecoversFromNonFiniteInput() throws {
+        try XCTSkipUnless(RADEDecoder.isAvailable, "RADE not built (scripts/fetch-rade.sh)")
+        for (fixture, version) in [("rade_v1_offair_8k", 1), ("rade_v2_8k", 2)] {
+            let (_, speech, synced, _, rate) = try decode(fixture, version: version, poisoned: true)
+            XCTAssertTrue(synced, "V\(version)")
+            let r = Int(rate)
+            XCTAssertGreaterThan(rms(speech[(2 * r)..<(9 * r)]), 0.02, "V\(version) speech while in sync")
+        }
     }
 
     /// Each version only syncs on its own signal.

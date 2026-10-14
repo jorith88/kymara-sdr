@@ -125,6 +125,12 @@ public final class RADEDecoder {
             // Conjugate: the signal below the dial frequency becomes the USB signal above it.
             q.inPlace { vDSP_vneg($0, 1, $0, 1, vDSP_Length(n)) }
         }
+        // One NaN or infinity would stick in the level tracking, and rade_c's V2 receiver never recovers from NaN
+        // input (freedv/rade_c#26), so drop non-finite samples here.
+        for k in 0..<n {
+            if !i[k].isFinite { i[k] = 0 }
+            if !q[k].isFinite { q[k] = 0 }
+        }
         normalise(&i, &q)
 
         var pos = 0
@@ -163,6 +169,8 @@ public final class RADEDecoder {
         var pi: Float = 0, pq: Float = 0
         vDSP_measqv(i, 1, &pi, vDSP_Length(n))
         vDSP_measqv(q, 1, &pq, vDSP_Length(n))
+        // Huge (finite) samples can still overflow it; start the average over.
+        if !power.isFinite { power = 0 }
         let a = power == 0 ? 1 : 1 - Float(exp(-Double(n) / modemRate / 1.0))
         power += a * (pi + pq - power)
         var gain = 1 / max(power, 1e-12).squareRoot()
