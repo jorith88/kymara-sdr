@@ -11,7 +11,9 @@ public final class RTLTCPSource: IQSource, @unchecked Sendable {
     public var onError: ((String) -> Void)?
     public var onInfoChanged: (() -> Void)?
 
+    /// All connection and stream state below is only touched on this queue.
     private let queue = DispatchQueue(label: "rtl_tcp", qos: .userInteractive)
+    private let queueKey = DispatchSpecificKey<Void>()
     private var connection: NWConnection?
     private var handler: IQHandler?
     private var headerBytes = Data()
@@ -30,6 +32,7 @@ public final class RTLTCPSource: IQSource, @unchecked Sendable {
     public init(host: String, port: UInt16) {
         self.host = host
         self.port = port
+        queue.setSpecific(key: queueKey, value: ())
     }
 
     deinit { stop() }
@@ -38,37 +41,57 @@ public final class RTLTCPSource: IQSource, @unchecked Sendable {
         guard let nwPort = NWEndpoint.Port(rawValue: port) else {
             throw SourceError.connectionFailed("invalid port \(port)")
         }
-        self.sampleRate = sampleRate
-        self.center = centerFrequency
-        self.handler = handler
-        headerBytes = Data()
-        leftover = nil
-        stopped = false
-
-        let conn = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: .tcp)
-        connection = conn
-        conn.stateUpdateHandler = { [weak self] state in
-            guard let self else { return }
-            switch state {
-            case .ready:
-                self.sendInitialConfig()
-                self.receive()
-            case .failed(let error):
-                if !self.stopped { self.onError?("rtl_tcp: \(error.localizedDescription)") }
-            case .waiting(let error):
-                if !self.stopped { self.onError?("rtl_tcp: cannot reach \(self.host):\(self.port) (\(error.localizedDescription))") }
-            default:
-                break
+        onQueue {
+            stopOnQueue()
+            self.sampleRate = sampleRate
+            self.center = centerFrequency
+            self.handler = handler
+            headerBytes = Data()
+            leftover = nil
+            stopped = false
+            let conn = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: .tcp)
+            connection = conn
+            conn.stateUpdateHandler = { [weak self, weak conn] state in
+                self?.connectionStateChanged(state, conn)
             }
+            conn.start(queue: queue)
         }
-        conn.start(queue: queue)
     }
 
     public func stop() {
+        onQueue { stopOnQueue() }
+    }
+
+    /// Runs `body` on `queue`, directly when already on it (deinit can run there), so it never deadlocks.
+    private func onQueue(_ body: () -> Void) {
+        if DispatchQueue.getSpecific(key: queueKey) != nil {
+            body()
+        } else {
+            queue.sync(execute: body)
+        }
+    }
+
+    private func stopOnQueue() {
         stopped = true
         connection?.cancel()
         connection = nil
         handler = nil
+    }
+
+    /// Events of `conn`; ignored once it is no longer the current connection (stopped, or replaced by a restart).
+    private func connectionStateChanged(_ state: NWConnection.State, _ conn: NWConnection?) {
+        guard let conn, conn === connection else { return }
+        switch state {
+        case .ready:
+            sendInitialConfig()
+            receive(conn)
+        case .failed(let error):
+            if !stopped { onError?("rtl_tcp: \(error.localizedDescription)") }
+        case .waiting(let error):
+            if !stopped { onError?("rtl_tcp: cannot reach \(host):\(port) (\(error.localizedDescription))") }
+        default:
+            break
+        }
     }
 
     private func sendInitialConfig() {
@@ -98,9 +121,9 @@ public final class RTLTCPSource: IQSource, @unchecked Sendable {
         }
     }
 
-    private func receive() {
-        connection?.receive(minimumIncompleteLength: 1, maximumLength: 1 << 18) { [weak self] data, _, isComplete, error in
-            guard let self, !self.stopped else { return }
+    private func receive(_ conn: NWConnection) {
+        conn.receive(minimumIncompleteLength: 1, maximumLength: 1 << 18) { [weak self, weak conn] data, _, isComplete, error in
+            guard let self, let conn, conn === self.connection, !self.stopped else { return }
             if let data, !data.isEmpty { self.consume(data) }
             if let error {
                 self.onError?("rtl_tcp: \(error.localizedDescription)")
@@ -110,7 +133,7 @@ public final class RTLTCPSource: IQSource, @unchecked Sendable {
                 self.onError?("rtl_tcp: server closed the connection")
                 return
             }
-            self.receive()
+            self.receive(conn)
         }
     }
 
@@ -147,37 +170,51 @@ public final class RTLTCPSource: IQSource, @unchecked Sendable {
     }
 
     public func setCenterFrequency(_ hz: Double) {
-        center = hz
-        queue.async { self.send(0x01, UInt32(clamping: Int64(hz))) }
+        queue.async {
+            self.center = hz
+            self.send(0x01, UInt32(clamping: Int64(hz)))
+        }
     }
 
     public func setGain(_ tenthsDB: Int?) {
-        gain = tenthsDB
-        queue.async { self.sendGain() }
+        queue.async {
+            self.gain = tenthsDB
+            self.sendGain()
+        }
     }
 
     public func setPPM(_ ppm: Int) {
-        self.ppm = ppm
-        queue.async { self.send(0x05, UInt32(bitPattern: Int32(ppm))) }
+        queue.async {
+            self.ppm = ppm
+            self.send(0x05, UInt32(bitPattern: Int32(ppm)))
+        }
     }
 
     public func setRTLAGC(_ on: Bool) {
-        rtlAGC = on
-        queue.async { self.send(0x08, on ? 1 : 0) }
+        queue.async {
+            self.rtlAGC = on
+            self.send(0x08, on ? 1 : 0)
+        }
     }
 
     public func setDirectSampling(_ mode: Int) {
-        directSampling = mode
-        queue.async { self.send(0x09, UInt32(mode)) }
+        queue.async {
+            self.directSampling = mode
+            self.send(0x09, UInt32(mode))
+        }
     }
 
     public func setBiasTee(_ on: Bool) {
-        biasTee = on
-        queue.async { self.send(0x0e, on ? 1 : 0) }
+        queue.async {
+            self.biasTee = on
+            self.send(0x0e, on ? 1 : 0)
+        }
     }
 
     public func setOffsetTuning(_ on: Bool) {
-        offsetTuning = on
-        queue.async { self.send(0x0a, on ? 1 : 0) }
+        queue.async {
+            self.offsetTuning = on
+            self.send(0x0a, on ? 1 : 0)
+        }
     }
 }
