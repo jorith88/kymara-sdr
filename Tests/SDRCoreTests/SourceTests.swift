@@ -1,4 +1,5 @@
 import XCTest
+import AVFoundation
 @testable import SDRCore
 
 final class SourceTests: XCTestCase {
@@ -51,6 +52,47 @@ final class RecorderTests: XCTestCase {
         let got = lock.withLock { received }
         XCTAssertGreaterThanOrEqual(got.count, payload.count)
         XCTAssertEqual(Array(got.prefix(payload.count)), payload)
+    }
+
+    /// A failing write (full disk, removed volume) stops the recording and reports it once.
+    func testIQWriteErrorStopsRecording() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let rec = Recorder()
+        var messages: [String] = []
+        rec.onAutoStop = { messages.append($0) }
+        try rec.startIQ(url: dir.appendingPathComponent("iq.wav"), sampleRate: 1_024_000)
+        let block = [UInt8](repeating: 127, count: 4096)
+        block.withUnsafeBufferPointer { rec.writeIQ(.u8($0)) }
+        rec.closeIQFileForTesting()
+        for _ in 0..<3 { block.withUnsafeBufferPointer { rec.writeIQ(.u8($0)) } }
+        XCTAssertFalse(rec.isRecordingIQ)
+        XCTAssertEqual(messages.count, 1)
+        XCTAssertTrue(messages.first?.hasPrefix("I/Q recording stopped: ") ?? false, messages.first ?? "")
+    }
+
+    func testAudioWriteErrorStopsRecording() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let rec = Recorder()
+        var messages: [String] = []
+        rec.onAutoStop = { messages.append($0) }
+        let samples = [Float](repeating: 0.1, count: 4800)
+        // A finished recording, opened for reading: writing to it fails.
+        let first = dir.appendingPathComponent("first.wav")
+        try rec.startAudio(url: first, sampleRate: 48_000)
+        rec.writeAudio(left: samples, right: samples, count: samples.count)
+        rec.stopAudio()
+        XCTAssertEqual(messages, [])
+
+        try rec.startAudio(url: dir.appendingPathComponent("second.wav"), sampleRate: 48_000)
+        rec.replaceAudioFileForTesting(try AVAudioFile(forReading: first, commonFormat: .pcmFormatFloat32, interleaved: false))
+        for _ in 0..<3 { rec.writeAudio(left: samples, right: samples, count: samples.count) }
+        XCTAssertFalse(rec.isRecordingAudio)
+        XCTAssertEqual(messages.count, 1)
+        XCTAssertTrue(messages.first?.hasPrefix("Audio recording stopped: ") ?? false, messages.first ?? "")
     }
 
     func test16BitIQRecordingPlaysBackAt16Bit() throws {

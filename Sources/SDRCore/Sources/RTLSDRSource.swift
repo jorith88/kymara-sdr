@@ -127,10 +127,17 @@ public struct RTLDeviceInfo: Identifiable, Hashable, Sendable {
     }
 }
 
+/// The read callback's context. The reader thread owns it until `readAsync` returns, so it outlives the source when
+/// a stop times out and the callback may still run.
+private final class RTLReadContext {
+    weak var source: RTLSDRSource?
+    init(_ source: RTLSDRSource) { self.source = source }
+}
+
 private let rtlReadCallback: RTLSDRLibrary.ReadCallback = { buf, len, ctx in
     guard let buf, let ctx else { return }
-    let source = Unmanaged<RTLSDRSource>.fromOpaque(ctx).takeUnretainedValue()
-    source.deliver(UnsafeBufferPointer(start: buf, count: Int(len)))
+    let context = Unmanaged<RTLReadContext>.fromOpaque(ctx).takeUnretainedValue()
+    context.source?.deliver(UnsafeBufferPointer(start: buf, count: Int(len)))
 }
 
 public final class RTLSDRSource: IQSource, @unchecked Sendable {
@@ -160,6 +167,8 @@ public final class RTLSDRSource: IQSource, @unchecked Sendable {
 
     private let lock = NSLock()
     private var dev: OpaquePointer?
+    /// Guards only `handler`, so the reader thread never waits for a USB control transfer done under `lock`.
+    private let handlerLock = NSLock()
     private var handler: IQHandler?
     private var readThreadDone = DispatchSemaphore(value: 0)
     private var stopping = false
@@ -180,6 +189,7 @@ public final class RTLSDRSource: IQSource, @unchecked Sendable {
     deinit { stop() }
 
     fileprivate func deliver(_ buffer: UnsafeBufferPointer<UInt8>) {
+        let handler = handlerLock.withLock { self.handler }
         handler?(.u8(buffer))
     }
 
@@ -218,13 +228,15 @@ public final class RTLSDRSource: IQSource, @unchecked Sendable {
         _ = lib.setBiasTee?(d, biasTee ? 1 : 0)
         _ = lib.resetBuffer(d)
 
-        self.handler = handler
+        handlerLock.withLock { self.handler = handler }
         readThreadDone = DispatchSemaphore(value: 0)
         let done = readThreadDone
-        let ctx = Unmanaged.passUnretained(self).toOpaque()
+        let context = RTLReadContext(self)
         let thread = Thread { [weak self] in
             // ~27 ms per buffer at 2.4 MS/s.
-            let result = lib.readAsync(d, rtlReadCallback, ctx, 12, 16384 * 8)
+            let result = withExtendedLifetime(context) {
+                lib.readAsync(d, rtlReadCallback, Unmanaged.passUnretained(context).toOpaque(), 12, 16384 * 8)
+            }
             if let self {
                 self.lock.lock()
                 let wasStopping = self.stopping
@@ -248,12 +260,20 @@ public final class RTLSDRSource: IQSource, @unchecked Sendable {
         stopping = true
         lock.unlock()
         _ = lib.cancelAsync(d)
-        _ = readThreadDone.wait(timeout: .now() + 3)
+        let timedOut = readThreadDone.wait(timeout: .now() + 3) == .timedOut
         lock.lock()
         dev = nil
         lock.unlock()
+        handlerLock.withLock { handler = nil }
+        if timedOut {
+            // readAsync is still running on the reader thread, inside librtlsdr with this device. Closing the device
+            // under it would free memory it is using (a crash, or a wedged USB transfer), so leak the device instead.
+            // The callback's context is owned by the reader thread and holds this source weakly, so it stays valid.
+            // The dongle stays claimed until the app quits or it is replugged.
+            onError?("The RTL-SDR did not stop. It may need to be unplugged and plugged in again.")
+            return
+        }
         _ = lib.close(d)
-        handler = nil
     }
 
     private func withDevice(_ body: (RTLSDRLibrary, OpaquePointer) -> Void) {

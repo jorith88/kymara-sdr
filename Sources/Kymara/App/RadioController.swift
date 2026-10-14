@@ -191,8 +191,11 @@ final class RadioController {
         loading = false
         engine.recorder.onAutoStop = { [weak self] msg in
             Task { @MainActor in
-                self?.recordingIQ = false
-                self?.errorMessage = msg
+                guard let self else { return }
+                // Either recording can stop by itself; the recorder knows which.
+                self.recordingIQ = self.engine.recorder.isRecordingIQ
+                self.recordingAudio = self.engine.recorder.isRecordingAudio
+                self.errorMessage = msg
             }
         }
         meterTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
@@ -298,10 +301,13 @@ final class RadioController {
             return
         }
 
-        src.onError = { [weak self] msg in
+        src.onError = { [weak self, weak src] msg in
             Task { @MainActor in
-                self?.errorMessage = msg
-                self?.stop()
+                // A late error from a previous source must not stop the current one. With no source running it is
+                // still shown (an RTL-SDR that failed to stop reports that from stop()).
+                guard let self, self.source == nil || self.source === src else { return }
+                self.errorMessage = msg
+                self.stop()
             }
         }
         src.onInfoChanged = { [weak self, weak src] in

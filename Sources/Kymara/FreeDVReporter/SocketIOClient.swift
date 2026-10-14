@@ -18,8 +18,8 @@ enum SocketIOPacket: Equatable {
         var data: [String: AnyHashable]
     }
 
-    /// Engine.IO open; the session is ready for the Socket.IO connect.
-    case open
+    /// Engine.IO open; the session is ready for the Socket.IO connect. Intervals in ms.
+    case open(pingInterval: Int, pingTimeout: Int)
     case ping
     /// Socket.IO connect accepted.
     case connected
@@ -31,7 +31,11 @@ enum SocketIOPacket: Equatable {
     case other
 
     static func parse(_ text: String) -> SocketIOPacket {
-        if text.hasPrefix("0") { return .open }
+        if text.hasPrefix("0") {
+            let json = try? JSONSerialization.jsonObject(with: Data(text.dropFirst().utf8)) as? [String: Any]
+            return .open(pingInterval: json?["pingInterval"] as? Int ?? 25000,
+                         pingTimeout: json?["pingTimeout"] as? Int ?? 20000)
+        }
         if text == "2" { return .ping }
         if text.hasPrefix("40") { return .connected }
         if text.hasPrefix("44") {
@@ -74,6 +78,27 @@ enum SocketIOPacket: Equatable {
     }
 }
 
+/// Engine.IO liveness: the server pings every `pingInterval` and expects a pong within `pingTimeout`, so silence for
+/// longer than both together means the connection is dead (a half-open socket after a network change or sleep).
+struct SocketIOWatchdog {
+    let timeout: TimeInterval
+    private(set) var deadline: Date
+
+    init(pingInterval: Int, pingTimeout: Int, now: Date) {
+        timeout = Double(pingInterval + pingTimeout) / 1000
+        deadline = now + timeout
+    }
+
+    /// A packet arrived.
+    mutating func reset(now: Date) {
+        deadline = now + timeout
+    }
+
+    func expired(now: Date) -> Bool {
+        now >= deadline
+    }
+}
+
 /// Socket.IO client over `URLSessionWebSocketTask` (websocket transport only, no polling fallback).
 @MainActor
 final class SocketIOClient: ReporterTransport {
@@ -83,6 +108,8 @@ final class SocketIOClient: ReporterTransport {
     private let task: URLSessionWebSocketTask
     private let auth: [String: Any]
     private var closed = false
+    private var watchdog: SocketIOWatchdog?
+    private var watchdogTask: Task<Void, Never>?
 
     /// Connects to `host` (`wss://<host>/socket.io/`) and sends `auth` with the Socket.IO connect.
     init(host: String, auth: [String: Any], session: URLSession = .shared) {
@@ -104,6 +131,7 @@ final class SocketIOClient: ReporterTransport {
     func close() {
         guard !closed else { return }
         closed = true
+        watchdogTask?.cancel()
         task.cancel(with: .normalClosure, reason: nil)
         onClose?(nil)
     }
@@ -120,6 +148,7 @@ final class SocketIOClient: ReporterTransport {
         task.receive { [weak self] result in
             Task { @MainActor in
                 guard let self, !self.closed else { return }
+                if case .success = result { self.watchdog?.reset(now: Date()) }
                 switch result {
                 case .success(.string(let text)):
                     self.handle(text)
@@ -135,7 +164,9 @@ final class SocketIOClient: ReporterTransport {
 
     private func handle(_ text: String) {
         switch SocketIOPacket.parse(text) {
-        case .open: send(SocketIOPacket.connect(auth: auth))
+        case .open(let pingInterval, let pingTimeout):
+            startWatchdog(pingInterval: pingInterval, pingTimeout: pingTimeout)
+            send(SocketIOPacket.connect(auth: auth))
         case .ping: send("3")
         case .connected, .other: break
         case .refused(let message): fail(message)
@@ -144,9 +175,26 @@ final class SocketIOClient: ReporterTransport {
         }
     }
 
+    /// Fails the connection once no packet has arrived before the watchdog's deadline.
+    private func startWatchdog(pingInterval: Int, pingTimeout: Int) {
+        watchdog = SocketIOWatchdog(pingInterval: pingInterval, pingTimeout: pingTimeout, now: Date())
+        watchdogTask?.cancel()
+        watchdogTask = Task { [weak self] in
+            while let deadline = self?.watchdog?.deadline {
+                try? await Task.sleep(for: .seconds(max(0, deadline.timeIntervalSinceNow)))
+                guard !Task.isCancelled, let self else { return }
+                if self.watchdog?.expired(now: Date()) == true {
+                    self.fail("Connection timed out")
+                    return
+                }
+            }
+        }
+    }
+
     private func fail(_ message: String) {
         guard !closed else { return }
         closed = true
+        watchdogTask?.cancel()
         task.cancel(with: .goingAway, reason: nil)
         onClose?(message)
     }
