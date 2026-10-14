@@ -167,6 +167,8 @@ public final class RTLSDRSource: IQSource, @unchecked Sendable {
 
     private let lock = NSLock()
     private var dev: OpaquePointer?
+    /// Guards only `handler`, so the reader thread never waits for a USB control transfer done under `lock`.
+    private let handlerLock = NSLock()
     private var handler: IQHandler?
     private var readThreadDone = DispatchSemaphore(value: 0)
     private var stopping = false
@@ -187,9 +189,7 @@ public final class RTLSDRSource: IQSource, @unchecked Sendable {
     deinit { stop() }
 
     fileprivate func deliver(_ buffer: UnsafeBufferPointer<UInt8>) {
-        lock.lock()
-        let handler = self.handler
-        lock.unlock()
+        let handler = handlerLock.withLock { self.handler }
         handler?(.u8(buffer))
     }
 
@@ -228,7 +228,7 @@ public final class RTLSDRSource: IQSource, @unchecked Sendable {
         _ = lib.setBiasTee?(d, biasTee ? 1 : 0)
         _ = lib.resetBuffer(d)
 
-        self.handler = handler
+        handlerLock.withLock { self.handler = handler }
         readThreadDone = DispatchSemaphore(value: 0)
         let done = readThreadDone
         let context = RTLReadContext(self)
@@ -263,8 +263,8 @@ public final class RTLSDRSource: IQSource, @unchecked Sendable {
         let timedOut = readThreadDone.wait(timeout: .now() + 3) == .timedOut
         lock.lock()
         dev = nil
-        handler = nil
         lock.unlock()
+        handlerLock.withLock { handler = nil }
         if timedOut {
             // readAsync is still running on the reader thread, inside librtlsdr with this device. Closing the device
             // under it would free memory it is using (a crash, or a wedged USB transfer), so leak the device instead.
