@@ -191,8 +191,11 @@ final class RadioController {
         loading = false
         engine.recorder.onAutoStop = { [weak self] msg in
             Task { @MainActor in
-                self?.recordingIQ = false
-                self?.errorMessage = msg
+                guard let self else { return }
+                // Either recording can stop by itself; the recorder knows which.
+                self.recordingIQ = self.engine.recorder.isRecordingIQ
+                self.recordingAudio = self.engine.recorder.isRecordingAudio
+                self.errorMessage = msg
             }
         }
         meterTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in

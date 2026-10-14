@@ -14,7 +14,7 @@ public final class Recorder: @unchecked Sendable {
     public private(set) var iqURL: URL?
     public private(set) var audioURL: URL?
 
-    /// Called when a recording stops by itself (e.g. size limit).
+    /// Called when a recording stops by itself (size limit, write error).
     public var onAutoStop: ((String) -> Void)?
 
     public init() {}
@@ -41,7 +41,7 @@ public final class Recorder: @unchecked Sendable {
     }
 
     func writeIQ(_ samples: IQSamples) {
-        var limitHit = false
+        var stopMessage: String?
         lock.withLock {
             guard let handle = iqHandle, samples.bits == Int(iqBits) else { return }
             let data: Data
@@ -50,25 +50,34 @@ public final class Recorder: @unchecked Sendable {
             case .s16(let b): data = Data(buffer: b)   // little-endian on Apple silicon, as WAV requires
             }
             if iqBytes + UInt64(data.count) > 0xFFFF_0000 {
-                limitHit = true
+                stopMessage = "I/Q recording stopped at the 4 GB WAV limit."
                 return
             }
-            try? handle.write(contentsOf: data)
+            do {
+                try handle.write(contentsOf: data)
+            } catch {
+                stopMessage = "I/Q recording stopped: \(error.localizedDescription)"
+                return
+            }
             iqBytes += UInt64(data.count)
         }
-        if limitHit {
-            stopIQ()
-            onAutoStop?("I/Q recording stopped at the 4 GB WAV limit.")
-        }
+        if let stopMessage, finishIQ() { onAutoStop?(stopMessage) }
     }
 
     public func stopIQ() {
+        finishIQ()
+    }
+
+    /// Writes the final header (as far as the file still allows) and closes the file; false if none was open.
+    @discardableResult
+    private func finishIQ() -> Bool {
         lock.withLock {
-            guard let handle = iqHandle else { return }
+            guard let handle = iqHandle else { return false }
             try? handle.seek(toOffset: 0)
             try? handle.write(contentsOf: Recorder.wavHeader(sampleRate: iqSampleRate, bits: iqBits, dataBytes: UInt32(iqBytes)))
             try? handle.close()
             iqHandle = nil
+            return true
         }
     }
 
@@ -111,6 +120,7 @@ public final class Recorder: @unchecked Sendable {
     }
 
     func writeAudio(left: UnsafePointer<Float>, right: UnsafePointer<Float>, count: Int) {
+        var stopMessage: String?
         lock.withLock {
             guard let file = audioFile, let buffer = audioBuffer, count > 0 else { return }
             var done = 0
@@ -120,16 +130,39 @@ public final class Recorder: @unchecked Sendable {
                 ch[0].update(from: left + done, count: chunk)
                 ch[1].update(from: right + done, count: chunk)
                 buffer.frameLength = AVAudioFrameCount(chunk)
-                try? file.write(from: buffer)
+                do {
+                    try file.write(from: buffer)
+                } catch {
+                    stopMessage = "Audio recording stopped: \(error.localizedDescription)"
+                    return
+                }
                 done += chunk
             }
         }
+        if let stopMessage, finishAudio() { onAutoStop?(stopMessage) }
     }
 
     public func stopAudio() {
+        finishAudio()
+    }
+
+    /// Closes the file (AVAudioFile finalises it); false if none was open.
+    @discardableResult
+    private func finishAudio() -> Bool {
         lock.withLock {
+            guard audioFile != nil else { return false }
             audioFile = nil
             audioBuffer = nil
+            return true
         }
+    }
+
+    /// Test hooks: make the next writes fail as on a removed volume.
+    func closeIQFileForTesting() {
+        lock.withLock { try? iqHandle?.close() }
+    }
+
+    func replaceAudioFileForTesting(_ file: AVAudioFile) {
+        lock.withLock { audioFile = file }
     }
 }
