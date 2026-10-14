@@ -6,6 +6,37 @@
         <link>https://github.com/jorith88/kymara-sdr</link>
         <!-- items -->
         <item>
+            <title>Kymara SDR 1.0.0-beta.12</title>
+            <pubDate>Wed, 14 Oct 2026 20:54:07 +0000</pubDate>
+            <sparkle:version>12</sparkle:version>
+            <sparkle:shortVersionString>1.0.0-beta.12</sparkle:shortVersionString>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<p>A reliability release: no new features, but several fixes for situations where Kymara could hang, crash or quietly<br>
+stop working.</p>
+<h2>FreeDV</h2>
+<ul>
+<li>FreeDV Reporter and the FreeDV station list now notice a dead connection (after a Wi-Fi change or waking the Mac<br>
+from sleep) and reconnect, instead of staying "connected" forever.</li>
+<li>A single corrupt sample no longer stops RADE decoding for good; RADE2 in particular could go silent until the mode<br>
+was switched.</li>
+</ul>
+<h2>Receivers</h2>
+<ul>
+<li>RTL-SDR: if the dongle doesn't stop within 3 seconds, Kymara no longer risks a crash by closing it anyway; it shows<br>
+a message asking you to replug it.</li>
+<li>rtl_tcp: fixed thread-safety issues when starting and stopping. A stale error from a previous connection could stop<br>
+the receiver right after a restart.</li>
+<li>An error from a receiver that had already been replaced can no longer stop the one that is running.</li>
+</ul>
+<h2>Recording</h2>
+<ul>
+<li>A recording that can't be written (full disk, removed volume) now stops with an error message, instead of carrying<br>
+on into a broken file. I/Q recordings get a valid header as far as the file allows.</li>
+</ul>]]></description>
+            <enclosure url="https://github.com/jorith88/kymara-sdr/releases/download/v1.0.0-beta.12/Kymara-1.0.0-beta.12.dmg" sparkle:edSignature="yrK0HyFQRPmfFtpRG6veb+hp8oaLUy/ouLpIUZDRh7qpBoFTjuclGfBZZGziQxNh4o/4TKpheC+hLvNhfVLoBQ==" length="18873613" type="application/octet-stream"/>
+        </item>
+        <item>
             <title>Kymara SDR 1.0.0-beta.11</title>
             <pubDate>Wed, 14 Oct 2026 17:07:07 +0000</pubDate>
             <sparkle:version>11</sparkle:version>
