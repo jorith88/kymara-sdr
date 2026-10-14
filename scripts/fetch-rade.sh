@@ -1,7 +1,7 @@
 #!/bin/bash
-# Fetches the RADE (FreeDV Radio Autoencoder) V1 receiver from the C port, the parts of Opus it needs (the FARGAN
-# vocoder and the neural-network kernels) and FreeDV's end-of-over callsign decoder into Sources/CRADE/vendor.
-# The sources hold ~45 MB of generated model weights, so they are not checked in. Without them CRADE builds as a
+# Fetches the RADE (FreeDV Radio Autoencoder) V1 and V2 receivers from the C port, the parts of Opus they need (the
+# FARGAN vocoder and the neural-network kernels) and FreeDV's callsign decoders (V1 and V2) into Sources/CRADE/vendor.
+# The sources hold ~85 MB of generated model weights, so they are not checked in. Without them CRADE builds as a
 # stub and RADE mode is hidden.
 #
 # Usage: scripts/fetch-rade.sh [--if-needed]
@@ -13,6 +13,8 @@ RADE_C_COMMIT=c8a3dc156045cae2cd251e1a4be0c304c9ddf2f9   # github.com/freedv/rad
 OPUS_COMMIT=940d4e5af64351ca8ba8390df3f555484c567fbb     # github.com/xiph/opus (the commit rade_c builds against)
 OPUS_MODEL_SHA256=4ed9445b96698bad25d852e912b41495ddfa30c8dbc8a55f9cde5826ed793453
 FREEDV_BACKEND_COMMIT=80183302230716029def1d0ae8655fb76f96d91e   # github.com/tmiw/freedv-backend (rade_text, LDPC)
+# The same repository's radev2-dev branch: V2's callsign, streamed over the BPSK data-symbol channel during the over.
+FREEDV_V2_TEXT_COMMIT=6053eaab16e5e376280db209eb4c1001a83689bf
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEST="$ROOT/Sources/CRADE/vendor"
@@ -21,7 +23,7 @@ DEST="$ROOT/Sources/CRADE/vendor"
 RECIPE=$(cat "$ROOT/scripts/fetch-rade.sh" "$ROOT"/scripts/patches/rade_c-*.patch "$ROOT/Sources/CRADE/ulog_stub.h" \
     | shasum -a 256 | cut -c1-16)
 VERSION_LINE="RADE_C_COMMIT=$RADE_C_COMMIT OPUS_COMMIT=$OPUS_COMMIT OPUS_MODEL_SHA256=$OPUS_MODEL_SHA256"
-VERSION_LINE+=" FREEDV_BACKEND_COMMIT=$FREEDV_BACKEND_COMMIT RECIPE=$RECIPE"
+VERSION_LINE+=" FREEDV_BACKEND_COMMIT=$FREEDV_BACKEND_COMMIT FREEDV_V2_TEXT_COMMIT=$FREEDV_V2_TEXT_COMMIT RECIPE=$RECIPE"
 if [ "${1:-}" = "--if-needed" ] && [ "$(cat "$DEST/VERSION" 2>/dev/null)" = "$VERSION_LINE" ]; then
     echo "RADE sources are up to date"
     exit 0
@@ -46,6 +48,8 @@ echo "Fetching opus $OPUS_COMMIT"
 fetch_commit https://github.com/xiph/opus.git "$OPUS_COMMIT" "$WORK/opus" celt dnn include
 echo "Fetching freedv-backend $FREEDV_BACKEND_COMMIT"
 fetch_commit https://github.com/tmiw/freedv-backend.git "$FREEDV_BACKEND_COMMIT" "$WORK/freedv" src/pipeline
+echo "Fetching freedv-backend $FREEDV_V2_TEXT_COMMIT (RADE V2 text)"
+fetch_commit https://github.com/tmiw/freedv-backend.git "$FREEDV_V2_TEXT_COMMIT" "$WORK/freedv_v2" src/pipeline
 
 MODEL="opus_data-$OPUS_MODEL_SHA256.tar.gz"
 echo "Fetching Opus model data"
@@ -57,14 +61,17 @@ tar -xzf "$WORK/$MODEL" -C "$WORK/opus"
 for p in "$ROOT"/scripts/patches/rade_c-*.patch; do
     patch -s -d "$WORK/rade_c" -p1 < "$p"
 done
+# rade_c's own change to Opus: the V2 decoder has conv layers with more inputs than Opus's DRED models.
+patch -s -d "$WORK/opus" -p1 < "$WORK/rade_c/src/opus-nnet.c.diff"
 
 rm -rf "$DEST"
-mkdir -p "$DEST/rade" "$DEST/freedv/pipeline" "$DEST/freedv/util/logging" "$DEST/opus/celt/arm" "$DEST/opus/celt/x86" "$DEST/opus/dnn/arm" "$DEST/opus/include"
+mkdir -p "$DEST/rade" "$DEST/freedv/pipeline" "$DEST/freedv/util/logging" "$DEST/freedv_v2/pipeline" "$DEST/freedv_v2/util/logging" "$DEST/opus/celt/arm" "$DEST/opus/celt/x86" "$DEST/opus/dnn/arm" "$DEST/opus/include"
 
-# Only the V1 receiver is compiled (kymara_rade.c drives it directly): the encoder and the V2 models would add
-# ~16 MB of weights to the app. All headers come along, since rade_api.h (included by rade_text) pulls them in.
+# Only the V1 and V2 receivers are compiled (kymara_rade.c drives them directly): the encoders would add their
+# weights to the app for nothing. All headers come along, since rade_api.h (included by rade_text) pulls them in.
 R="$WORK/rade_c/src"
-for f in rade_dsp rade_bpf rade_ofdm rade_acq rade_rx rade_dec rade_dec_data; do
+for f in rade_dsp rade_bpf rade_ofdm rade_acq rade_rx rade_dec rade_dec_data \
+         rade_v2_ofdm rade_rx_v2 rade_dec_v2 rade_dec_v2_data rade_sync rade_sync_data; do
     cp "$R/$f.c" "$DEST/rade/"
 done
 find "$R" -maxdepth 1 -name 'rade_*.h' -exec cp {} "$DEST/rade/" \;
@@ -93,8 +100,15 @@ cp "$F/LICENSE" "$DEST/freedv/LICENSE"
 # rade_text.cpp logs through freedv's ulog; compile it out.
 cp "$ROOT/Sources/CRADE/ulog_stub.h" "$DEST/freedv/util/logging/ulog.h"
 
-# kymara_rade.c picks the real decoder or stubs with __has_include; make the build recompile it.
-touch "$ROOT/Sources/CRADE/kymara_rade.c"
+# V2's rade_text has the same C names as V1's; rade_text_v2.cpp includes it in a namespace with renamed functions.
+# The .inc extension keeps SwiftPM from compiling it on its own.
+F2="$WORK/freedv_v2/src/pipeline"
+cp "$F2/rade_text.cpp" "$DEST/freedv_v2/pipeline/rade_text.cpp.inc"
+for f in rade_text.h ldpc_code.h HRA_56_56.h; do cp "$F2/$f" "$DEST/freedv_v2/pipeline/"; done
+cp "$ROOT/Sources/CRADE/ulog_stub.h" "$DEST/freedv_v2/util/logging/ulog.h"
+
+# kymara_rade.c and rade_text_v2.cpp pick the real decoder or stubs with __has_include; make the build recompile them.
+touch "$ROOT/Sources/CRADE/kymara_rade.c" "$ROOT/Sources/CRADE/rade_text_v2.cpp"
 
 echo "$VERSION_LINE" > "$DEST/VERSION"
 echo "Done: $(du -sh "$DEST" | cut -f1) in Sources/CRADE/vendor"

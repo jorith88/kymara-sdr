@@ -1,5 +1,5 @@
-// RADE V1 receiver: the FreeDV Radio Autoencoder demodulator/decoder (rade_c) followed by the FARGAN vocoder
-// (Opus), behind one small API. The library sources are fetched by scripts/fetch-rade.sh.
+// RADE V1 and V2 receivers: the FreeDV Radio Autoencoder demodulator/decoder (rade_c) followed by the FARGAN
+// vocoder (Opus), behind one small API. The library sources are fetched by scripts/fetch-rade.sh.
 
 #ifndef KYMARA_RADE_H
 #define KYMARA_RADE_H
@@ -17,7 +17,9 @@ typedef struct kymara_rade kymara_rade;
 /// 0 when the RADE sources were not fetched; everything below is then a stub and open returns NULL.
 int kymara_rade_available(void);
 
-kymara_rade *kymara_rade_open(void);
+/// Opens a receiver for RADE V1 (`version` 1) or V2 (`version` 2). Both take the same modem input and give the
+/// same speech output. V1 sends the callsign at the end of an over, V2 repeatedly during it.
+kymara_rade *kymara_rade_open(int version);
 void kymara_rade_close(kymara_rade *k);
 
 /// Most speech samples one modem frame can produce; `speech_capacity` must be at least this.
@@ -39,7 +41,8 @@ float kymara_rade_frequency_offset(const kymara_rade *k);
 /// Number of end-of-over frames seen since opening.
 int kymara_rade_end_of_overs(const kymara_rade *k);
 
-/// The callsign from the last end-of-over that decoded (FEC converged and CRC matched), "" if none yet.
+/// The last callsign that decoded (FEC converged and CRC matched), "" if none yet: V1's from the end of an over,
+/// V2's from the data channel during it.
 const char *kymara_rade_callsign(const kymara_rade *k);
 /// Counts decoded callsigns, so a repeat of the same callsign can be told apart from no news.
 int kymara_rade_callsign_count(const kymara_rade *k);

@@ -427,6 +427,32 @@ final class DSPTests: XCTestCase {
         XCTAssertEqual(zeroCrossingFrequency(tail, sampleRate: rate), 700, accuracy: 15)
     }
 
+    /// A mode change rebuilds the chain with a fresh AGC; its first milliseconds must not come out louder than
+    /// the steady state (that was an audible pop).
+    func testModeChangeDoesNotOvershoot() {
+        let rx = Receiver()
+        var g = DSPConfig()
+        g.sampleRate = 2_400_000
+        var c = ReceiverConfig()
+        c.mode = .am
+        c.bandwidth = 2700
+        c.vfoOffset = 300_000
+        let n = 16384
+        var i = [Float](repeating: 0, count: n), q = i
+        func block() -> [Float] {
+            for k in 0..<n { i[k] = .random(in: -0.05...0.05); q[k] = .random(in: -0.05...0.05) }
+            let m = rx.process(i: i, q: q, count: n, config: c, global: g)
+            return Array(rx.left[0..<m])
+        }
+        for _ in 0..<20 { _ = block() }
+        c.mode = .usb
+        var audio: [Float] = []
+        for _ in 0..<90 { audio += block() }
+        let onset = audio[0..<4800].map(abs).max()!
+        let steady = audio[20_000...].map(abs).max()!
+        XCTAssertLessThan(onset, 1.3 * steady)
+    }
+
     func testNFMAudioPassesSpeechAndRemovesCTCSS() {
         func peak(_ f: Double, amplitude: Float) -> Float {
             var audio = NFMAudio(sampleRate: 48_000)

@@ -170,7 +170,7 @@ struct ReceiverPanel: View {
                 .labelsHidden()
             }
 
-            if radio.mode == .rade {
+            if radio.mode.isRADE {
                 Row("Sideband") {
                     Picker("Sideband", selection: $radio.radeSideband) {
                         ForEach(RADESideband.allCases) { s in
@@ -189,7 +189,7 @@ struct ReceiverPanel: View {
                 }
             }
 
-            if radio.mode != .wfm && radio.mode != .nfm && radio.mode != .rade {
+            if radio.mode != .wfm && radio.mode != .nfm && !radio.mode.isRADE {
                 Row("AGC") {
                     Picker("AGC", selection: $radio.agcMode) {
                         ForEach(AGCMode.allCases) { Text($0.rawValue).tag($0) }
@@ -323,10 +323,11 @@ private struct RADECallsignLabel: View {
             Text(call)
                 .font(.callout.monospaced().weight(.semibold))
                 .textSelection(.enabled)
-                .help("Sent at the end of the last over")
+                .help(radio.mode == .rade ? "Sent at the end of the last over" : "Sent during the over")
         } else {
             Text("none yet").font(.caption2).foregroundStyle(.secondary)
-                .help("FreeDV sends the callsign at the end of each over")
+                .help(radio.mode == .rade ? "FreeDV sends the callsign at the end of each over"
+                                               : "RADE V2 repeats the callsign during the over, every 4.5 s")
         }
     }
 }

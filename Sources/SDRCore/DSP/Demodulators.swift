@@ -8,15 +8,38 @@ public enum DemodMode: String, CaseIterable, Codable, Identifiable, Sendable {
     case usb = "USB"
     case lsb = "LSB"
     case cw = "CW"
-    case dsb = "DSB"
-    /// FreeDV RADE V1 digital voice (received in USB).
+    /// FreeDV RADE V1 digital voice (in USB, or LSB conjugated to USB orientation).
     case rade = "RADE"
+    /// FreeDV RADE V2 digital voice (the same; the callsign comes during the over).
+    case radeV2 = "RADE2"
 
     public var id: String { rawValue }
 
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        // DSB was removed; AM receives the same signals.
+        if raw == "DSB" { self = .am; return }
+        guard let mode = DemodMode(rawValue: raw) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Unknown mode \(raw)"))
+        }
+        self = mode
+    }
+
     /// The modes this build can receive (RADE needs the sources from scripts/fetch-rade.sh).
     public static var available: [DemodMode] {
-        allCases.filter { $0 != .rade || RADEDecoder.isAvailable }
+        allCases.filter { !$0.isRADE || RADEDecoder.isAvailable }
+    }
+
+    /// FreeDV RADE, either version.
+    public var isRADE: Bool { radeVersion != nil }
+
+    /// The RADE version this mode receives, nil for the analogue modes.
+    public var radeVersion: Int? {
+        switch self {
+        case .rade: return 1
+        case .radeV2: return 2
+        default: return nil
+        }
     }
 
     public var defaultBandwidth: Double {
@@ -26,8 +49,7 @@ public enum DemodMode: String, CaseIterable, Codable, Identifiable, Sendable {
         case .wfm: return 180_000
         case .usb, .lsb: return 2_700
         case .cw: return 500
-        case .dsb: return 6_000
-        case .rade: return 2_700
+        case .rade, .radeV2: return 2_700
         }
     }
 
@@ -38,8 +60,7 @@ public enum DemodMode: String, CaseIterable, Codable, Identifiable, Sendable {
         case .wfm: return [80_000, 120_000, 150_000, 180_000, 200_000]
         case .usb, .lsb: return [1_800, 2_100, 2_400, 2_700, 3_000, 4_000]
         case .cw: return [100, 200, 300, 500, 800, 1_200]
-        case .dsb: return [3_000, 4_000, 6_000, 8_000, 10_000]
-        case .rade: return [2_400, 2_700, 3_000]
+        case .rade, .radeV2: return [2_400, 2_700, 3_000]
         }
     }
 
@@ -48,8 +69,8 @@ public enum DemodMode: String, CaseIterable, Codable, Identifiable, Sendable {
         case .wfm: return 30_000...220_000
         case .cw: return 50...3_000
         case .usb, .lsb: return 500...6_000
-        // The RADE V1 signal occupies about 0.8–2.3 kHz from the dial frequency.
-        case .rade: return 2_400...3_000
+        // The RADE V1 signal occupies about 0.8–2.3 kHz from the dial frequency, V2 about 1.0–2.0 kHz.
+        case .rade, .radeV2: return 2_400...3_000
         default: return 1_000...40_000
         }
     }
@@ -59,8 +80,8 @@ public enum DemodMode: String, CaseIterable, Codable, Identifiable, Sendable {
         case .am: return 5_000
         case .nfm: return 12_500
         case .wfm: return 100_000
-        case .usb, .lsb, .dsb: return 100
-        case .rade: return 1_000
+        case .usb, .lsb: return 100
+        case .rade, .radeV2: return 1_000
         case .cw: return 10
         }
     }
@@ -68,15 +89,15 @@ public enum DemodMode: String, CaseIterable, Codable, Identifiable, Sendable {
     /// Modes where a steady tone in the audio is interference (a carrier or heterodyne), not the signal.
     public var supportsAutoNotch: Bool {
         switch self {
-        case .am, .usb, .lsb, .dsb: return true
-        case .nfm, .wfm, .cw, .rade: return false
+        case .am, .usb, .lsb: return true
+        case .nfm, .wfm, .cw, .rade, .radeV2: return false
         }
     }
 
     /// Filter passband edges relative to the VFO in Hz. `lsb` selects the sideband for RADE.
     public func filterEdges(bandwidth bw: Double, lsb: Bool = false) -> (lo: Double, hi: Double) {
         switch self {
-        case .rade: return lsb ? (-(100 + bw), -100) : (100, 100 + bw)
+        case .rade, .radeV2: return lsb ? (-(100 + bw), -100) : (100, 100 + bw)
         case .usb: return (100, 100 + bw)
         case .lsb: return (-(100 + bw), -100)
         default: return (-bw / 2, bw / 2)
@@ -403,6 +424,8 @@ public final class AGC {
     private var peak: Float = 1e-4
     private var hang = 0
     private var gain: Float = 1
+    /// The envelope has been measured; until then the first block seeds it (see `process`).
+    private var primed = false
     public private(set) var currentGainDB: Float = 0
 
     public init(sampleRate: Double) {
@@ -416,6 +439,7 @@ public final class AGC {
             var lo: Float = -1, hi: Float = 1
             vDSP_vclip(x, 1, &lo, &hi, x, 1, vDSP_Length(count))
             currentGainDB = manualGainDB
+            primed = false
             return
         }
         let (decayTime, hangTime): (Double, Double) = {
@@ -431,6 +455,15 @@ public final class AGC {
         let hangSamples = Int(sampleRate * hangTime)
         let target: Float = 0.3
         let maxGain: Float = 30_000
+        if !primed && count > 0 {
+            // Start from the first block's peak instead of a near-zero envelope, which would let the gain run
+            // up and clip the first ~15 ms (a pop after every mode change).
+            var m: Float = 0
+            vDSP_maxmgv(x, 1, &m, vDSP_Length(count))
+            peak = max(m, peak)
+            gain = min(target / max(peak, 1e-9), maxGain)
+            primed = true
+        }
         var p = peak, h = hang, g = gain
         for k in 0..<count {
             let env = abs(x[k])

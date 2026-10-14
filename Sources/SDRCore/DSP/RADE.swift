@@ -33,8 +33,8 @@ public struct RADEStatus: Equatable, Sendable {
     public var snrDB: Float = 0
     /// Offset of the received signal from where it should be (Hz), valid while in sync.
     public var frequencyOffset: Float = 0
-    /// Callsign from the last end-of-over that decoded, and how many have decoded so far
-    /// (so the same callsign sent again still counts as news).
+    /// The last callsign that decoded (V1 sends it at the end of an over, V2 repeatedly during it), and how many
+    /// have decoded so far (so the same callsign sent again still counts as news).
     public var callsign: String?
     public var callsignCount = 0
     /// End-of-over frames seen, whether or not their callsign decoded.
@@ -43,7 +43,7 @@ public struct RADEStatus: Equatable, Sendable {
     public init() {}
 }
 
-/// FreeDV RADE V1 receiver. Takes the channel as complex samples at the channel rate and returns decoded
+/// FreeDV RADE V1 or V2 receiver. Takes the channel as complex samples at the channel rate and returns decoded
 /// speech at the same rate, so the rest of the audio chain is unchanged. An LSB signal is mirrored to the
 /// orientation it has in USB before decoding.
 ///
@@ -55,6 +55,7 @@ public final class RADEDecoder {
     public static let isAvailable = kymara_rade_available() != 0
 
     public let rate: Double
+    public let version: Int
     public private(set) var status = RADEStatus()
 
     private let rade: OpaquePointer?
@@ -70,8 +71,10 @@ public final class RADEDecoder {
     private let prefill: Int
     private let maxFill: Int
 
-    public init(rate: Double) {
+    /// `version` is the RADE version to receive, 1 or 2.
+    public init(rate: Double, version: Int = 1) {
         self.rate = rate
+        self.version = version
         // The channel filter already limits the signal to the SSB passband, so the decimation filter only
         // has to keep aliases out of the 8 kHz modem band.
         inI = Resampler(inputRate: rate, outputRate: modemRate, passband: 3_000, stopband: 5_000)
@@ -79,7 +82,7 @@ public final class RADEDecoder {
         out = Resampler(inputRate: speechRate, outputRate: rate, passband: 7_000, stopband: 9_000)
         prefill = Int(0.18 * rate)
         maxFill = Int(0.5 * rate)
-        rade = kymara_rade_open()
+        rade = kymara_rade_open(Int32(version))
         let frame = rade.map { Int(kymara_rade_max_speech_per_frame($0)) } ?? 0
         speech = [Float](repeating: 0, count: max(frame, 1) * 2)
     }

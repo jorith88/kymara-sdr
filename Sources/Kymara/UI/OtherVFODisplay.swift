@@ -41,7 +41,7 @@ struct OtherVFODisplay: View {
                             .foregroundStyle(.secondary)
                     } else {
                         level(meter.signalDB)
-                        if let call = meter.radeCallsign, vfo.mode == .rade {
+                        if let call = meter.radeCallsign, vfo.mode.isRADE {
                             Text(call)
                                 .font(.system(size: 10, weight: .bold).monospaced())
                                 .foregroundStyle(Theme.vfo(id))
@@ -87,7 +87,7 @@ struct OtherVFODisplay: View {
         if !radio.otherInBand { parts.append("out of band") }
         if vfo.muted { parts.append("muted") }
         if vfo.mode == .wfm, meter.rds.hasData { parts.append(meter.rds.trimmedProgramService) }
-        if vfo.mode == .rade, let call = meter.radeCallsign { parts.append("callsign \(call)") }
+        if vfo.mode.isRADE, let call = meter.radeCallsign { parts.append("callsign \(call)") }
         return parts.joined(separator: ", ")
     }
 }

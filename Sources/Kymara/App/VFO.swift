@@ -26,8 +26,8 @@ struct VFOState: Codable, Equatable {
     var rds = true
 
     /// Whether RADE reception on this VFO is in LSB.
-    var radeLSB: Bool { mode == .rade && radeSideband.isLSB(at: frequency) }
-    var modeLabel: String { mode == .rade ? "RADE " + (radeLSB ? "LSB" : "USB") : mode.rawValue }
+    var radeLSB: Bool { mode.isRADE && radeSideband.isLSB(at: frequency) }
+    var modeLabel: String { mode.isRADE ? mode.rawValue + " " + (radeLSB ? "LSB" : "USB") : mode.rawValue }
     var filterEdges: (lo: Double, hi: Double) { mode.filterEdges(bandwidth: bandwidth, lsb: radeLSB) }
 
     private enum CodingKeys: String, CodingKey {

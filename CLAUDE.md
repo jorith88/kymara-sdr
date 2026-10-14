@@ -34,7 +34,7 @@ Two modules: **SDRCore** (sources, DSP, audio, recording — no UI) and **Kymara
 
 **Data flow / threading.** An `IQSource` (`RTLSDRSource`, `SDRplaySource`, `RTLTCPSource`, `FileSource`, `DemoSource`) delivers interleaved I/Q as `IQSamples` (`.u8` for RTL-SDR, `.s16` for SDRplay and 16-bit/float WAV files) on its own thread and calls `DSPEngine.process(_:)` directly. I/Q recordings use the source's `sampleBits`. `process` runs under `processLock`, takes a snapshot of `DSPConfig` and rebuilds filters when structural fields change (sample rate, mode → full rebuild; bandwidth → channel filter; FFT size → analyzer). `RadioController` (`@MainActor @Observable`) is the single source of UI state; every setting change calls `pushConfig()` which writes a fresh `DSPConfig`. Results flow back by polling, not callbacks: a 30 Hz timer reads `engine.status` (level, squelch, stereo, `RDSInfo`), and the Metal renderers pull from `SpectrumStore` each frame. Waterfall lines are queued in `SpectrumStore` and drained only by `WaterfallRenderer`.
 
-**DSP chain** (`DSPEngine.rates(for:)`): u8→float, DC removal, spectrum analyzer tap → NCO mix by `vfoOffset` → stage-1 decimation to ~240 kHz → WFM: channel filter, FM discriminator, RDS decoder on the MPX, `StereoDecoder` (pilot PLL, decimates to audio) → others: stage-2 decimation to ~48 kHz, channel filter (`FFTFilter`, overlap-save, complex taps for SSB), demodulate, auto notch (AM/SSB/DSB: a 1 s averaged FFT finds steady tones, narrow IIR notches remove them without latency), AGC. Audio rate is whatever falls out (48/51.2/… kHz); `AVAudioEngine` resamples. Filter passband edges per mode come from `DemodMode.filterEdges(bandwidth:)`, shared by DSP and the spectrum overlay.
+**DSP chain** (`DSPEngine.rates(for:)`): u8→float, DC removal, spectrum analyzer tap → NCO mix by `vfoOffset` → stage-1 decimation to ~240 kHz → WFM: channel filter, FM discriminator, RDS decoder on the MPX, `StereoDecoder` (pilot PLL, decimates to audio) → others: stage-2 decimation to ~48 kHz, channel filter (`FFTFilter`, overlap-save, complex taps for SSB), demodulate, auto notch (AM/SSB: a 1 s averaged FFT finds steady tones, narrow IIR notches remove them without latency), AGC. Audio rate is whatever falls out (48/51.2/… kHz); `AVAudioEngine` resamples. Filter passband edges per mode come from `DemodMode.filterEdges(bandwidth:)`, shared by DSP and the spectrum overlay.
 
 **VFO B** is a second receiver in the captured band. `DSPEngine` keeps conversion, DC removal and the spectrum;
 each VFO is a `Receiver` (`Receiver.swift`, NCO mix to squelched audio) configured by `DSPConfig.vfoA` / `vfoB`
@@ -67,25 +67,33 @@ release, with pre-releases in the `beta` channel (`allowedChannels`, the "Includ
 private key is in the login keychain; its public half is `SUPublicEDKey`. Never replace the key: installed copies
 only accept updates signed with it. The updater is off when running unbundled (`swift run`).
 
-**RADE** (FreeDV digital voice, V1) is the `rade` mode: the channel (USB, or LSB conjugated to USB orientation;
+**RADE** (FreeDV digital voice) is the `rade` (V1) and `radeV2` (V2, shown as RADE2) modes; `DemodMode.isRADE`
+covers both and `radeVersion` picks the receiver. The channel (USB, or LSB conjugated to USB orientation;
 `RADESideband` auto follows the SSB convention, LSB below 10 MHz except 60 m, and is resolved to `DSPConfig.radeLSB`
 by `RadioController`, since the engine doesn't know the absolute frequency) is resampled to 8 kHz complex, decoded by
 the rade_c C port plus Opus's FARGAN vocoder (`CRADE`, wrapper `kymara_rade.c`), and the 16 kHz speech is resampled
-back to the channel rate through a FIFO that smooths the ~120 ms frame bursts (`RADEDecoder`). The wrapper drives
-rade_c's V1 receiver directly, not through `rade_api.c`, which would also link the encoder and V2 models (~16 MB);
-the fetch script copies only the V1 receiver sources. The library sources (~45 MB of model weights) live in
+back to the channel rate through a FIFO that smooths the ~120 ms frame bursts (`RADEDecoder`). Both versions share
+the 8 kHz modem input (carriers around 1.5 kHz), the 36-float feature frames and the vocoder. The wrapper drives
+rade_c's V1 and V2 receivers directly, not through `rade_api.c`, which would also link the encoders and their weights;
+the fetch script copies only the receiver sources, and applies rade_c's own Opus patch (`opus-nnet.c.diff`: the V2
+decoder's conv layers need more inputs than Opus allows). The library sources (~85 MB of model weights) live in
 `Sources/CRADE/vendor`, fetched at pinned commits by `scripts/fetch-rade.sh` and git-ignored; without them
 `kymara_rade.c` compiles to stubs (`__has_include`) and `DemodMode.available` hides RADE. `build-app.sh` runs
 `fetch-rade.sh --if-needed` (refetches when the pins, the script or the patches change) and fails if the binary lacks
 the decoder, so a release can't ship without RADE.
-The end-of-over callsign is decoded by freedv-backend's `rade_text.cpp` (LDPC(112,56), CRC8), also fetched. Fixes to
+V1's end-of-over callsign is decoded by freedv-backend's `rade_text.cpp` (LDPC(112,56), CRC8), also fetched. Fixes to
 rade_c live in `scripts/patches/` and are applied by the fetch script (one fixes its EOO demodulator, which returned
-uninitialised memory and made callsign decoding hit-and-miss).
+uninitialised memory and made callsign decoding hit-and-miss). V2 has no EOO data; it streams the callsign during the
+over, one BPSK data symbol per modem frame, as repeated LDPC(112,56) blocks (base-38 characters, CRC8, combining of
+copies). That decoder is `rade_text.cpp` from freedv-backend's `radev2-dev` branch (pinned separately, an unreleased
+format that may still change); it has the same C names as V1's, so `rade_text_v2.cpp` includes it (as
+`rade_text.cpp.inc`, which SwiftPM doesn't compile on its own) inside a namespace with the functions renamed.
 `FreeDVReporter` (`Sources/Kymara/FreeDVReporter/`, owned by `RadioController`, settings under their own key)
 reports RADE reception to qso.freedv.org as a receive-only station, following freedv-backend's `FreeDVReporter.cpp`:
 Socket.IO over a websocket (`SocketIOClient`, a minimal client, no polling transport), auth with callsign, locator
 and `rx_only`, then after the server's `connection_successful` `freq_change`/`tx_report`/`message_update`, and
-`rx_report` per decoded callsign (a changed message is sent with `message_update`, without reconnecting) plus an empty-callsign one every 10 s while in sync (as freedv-gui does).
+`rx_report` per decoded callsign (a changed message is sent with `message_update`, without reconnecting) plus an empty-callsign one every 10 s while in sync (as freedv-gui does). The mode is reported as RADEV1 or RADEV2
+(a version switch sends a new `tx_report`), and clicking a RADEV2 station tunes in RADE2.
 `RadioController.updateMeter` drives it: connected only while running in RADE mode on a real receiver (not a
 file or demo source, which would put false reports on the map); frequency and settings changes are sent once they
 have settled for 1 s.

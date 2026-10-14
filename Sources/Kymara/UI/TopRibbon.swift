@@ -31,7 +31,7 @@ struct TopRibbon: View {
                             .foregroundStyle(Theme.green)
                             .accessibilityLabel("Stereo")
                     }
-                    if let call = radio.radeCallsign, radio.mode == .rade {
+                    if let call = radio.radeCallsign, radio.mode.isRADE {
                         Text(call)
                             .font(.system(size: 10, weight: .bold).monospaced())
                             .foregroundStyle(Theme.vfo(radio.selectedVFO))
@@ -135,7 +135,7 @@ struct TopRibbon: View {
                     .pickerStyle(.menu)
                     .fixedSize()
                     .controlSize(.small)
-                    .disabled(radio.mode == .wfm || radio.mode == .nfm || radio.mode == .rade)
+                    .disabled(radio.mode == .wfm || radio.mode == .nfm || radio.mode.isRADE)
                 }
             }
             .fixedSize()

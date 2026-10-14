@@ -148,13 +148,15 @@ final class Receiver {
             agc = AGC(sampleRate: ra)
             dcBlock = DCBlocker(cutoff: 40, sampleRate: ra)
             nfmAudio = NFMAudio(sampleRate: ra)
-            rade = c.mode == .rade ? RADEDecoder(rate: ra) : nil
+            rade = c.mode.radeVersion.map { RADEDecoder(rate: ra, version: $0) }
             squelchDelay = DelayLine(delay: c.mode == .nfm ? Int(0.02 * ra) : 0)
             mixer = Mixer()
             cwMixer = Mixer()
             envM2 = 0
             envM4 = 0
             snrDB = -20
+            // Fade in the new chain's audio (through the squelch fade) so its first samples don't click.
+            squelchGain = 0
         }
         if structural || previous!.0.bandwidth != c.bandwidth || previous!.0.radeLSB != c.radeLSB {
             buildChannelFilter(c)
@@ -428,7 +430,7 @@ final class Receiver {
                         let deviation = c.bandwidth / 5
                         fm.process(re: re, im: im, count: n, gain: Float(ra / (2 * .pi * deviation)), output: out)
                         nfmAudio.process(out, count: n)
-                    case .usb, .lsb, .dsb:
+                    case .usb, .lsb:
                         out.update(from: re, count: n)
                         if useNotch { notch.process(out, count: n, maxFrequency: notchMax) }
                         agc.process(out, count: n, mode: c.agcMode, manualGainDB: c.afGainDB)
@@ -438,7 +440,7 @@ final class Receiver {
                         cwMixer.mix(re: mre, im: mim, count: n, frequency: -g.cwPitch, sampleRate: ra)
                         out.update(from: re, count: n)
                         agc.process(out, count: n, mode: c.agcMode, manualGainDB: c.afGainDB)
-                    case .rade:
+                    case .rade, .radeV2:
                         // The vocoder's output has a fixed level, so no AGC.
                         rade?.process(re: re, im: im, count: n, lsb: c.radeLSB, output: out)
                     case .wfm:
