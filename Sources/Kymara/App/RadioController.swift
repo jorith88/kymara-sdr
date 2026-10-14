@@ -300,8 +300,9 @@ final class RadioController {
 
         src.onError = { [weak self, weak src] msg in
             Task { @MainActor in
-                // A late error from a previous source must not stop the current one.
-                guard let self, let src, self.source === src else { return }
+                // A late error from a previous source must not stop the current one. With no source running it is
+                // still shown (an RTL-SDR that failed to stop reports that from stop()).
+                guard let self, self.source == nil || self.source === src else { return }
                 self.errorMessage = msg
                 self.stop()
             }
