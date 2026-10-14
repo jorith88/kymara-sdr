@@ -157,7 +157,10 @@ public final class Recorder: @unchecked Sendable {
         }
     }
 
-    /// Test hooks: make the next writes fail as on a removed volume.
+    // MARK: Test-only hooks
+
+    // These exist for SourceTests (making writes fail as on a removed volume); the app must not use them.
+
     func closeIQFileForTesting() {
         lock.withLock { try? iqHandle?.close() }
     }
