@@ -36,7 +36,11 @@ final class FreeDVReporterTests: XCTestCase {
     private func advance(_ seconds: TimeInterval) { time = time.addingTimeInterval(seconds) }
 
     func testPacketParsing() {
-        XCTAssertEqual(SocketIOPacket.parse(#"0{"sid":"x","pingInterval":5000}"#), .open)
+        XCTAssertEqual(SocketIOPacket.parse(#"0{"sid":"x","pingInterval":5000,"pingTimeout":3000}"#),
+                       .open(pingInterval: 5000, pingTimeout: 3000))
+        XCTAssertEqual(SocketIOPacket.parse(#"0{"sid":"x","pingInterval":5000}"#),
+                       .open(pingInterval: 5000, pingTimeout: 20000))
+        XCTAssertEqual(SocketIOPacket.parse("0"), .open(pingInterval: 25000, pingTimeout: 20000))
         XCTAssertEqual(SocketIOPacket.parse("2"), .ping)
         XCTAssertEqual(SocketIOPacket.parse(#"40{"sid":"abc"}"#), .connected)
         XCTAssertEqual(SocketIOPacket.parse(#"44{"message":"Not authorized"}"#), .refused("Not authorized"))
@@ -45,6 +49,17 @@ final class FreeDVReporterTests: XCTestCase {
                        .event("freq_change", ["callsign": "K1AB", "freq": 7_177_000]))
         XCTAssertEqual(SocketIOPacket.parse("42not json"), .other)
         XCTAssertEqual(SocketIOPacket.parse("3"), .other)
+    }
+
+    func testWatchdog() {
+        let start = Date(timeIntervalSince1970: 1000)
+        var watchdog = SocketIOWatchdog(pingInterval: 25000, pingTimeout: 20000, now: start)
+        XCTAssertFalse(watchdog.expired(now: start + 44.9))
+        XCTAssertTrue(watchdog.expired(now: start + 45))
+        // A packet pushes the deadline back.
+        watchdog.reset(now: start + 30)
+        XCTAssertFalse(watchdog.expired(now: start + 74.9))
+        XCTAssertTrue(watchdog.expired(now: start + 75))
     }
 
     func testPacketEncoding() {
