@@ -298,10 +298,12 @@ final class RadioController {
             return
         }
 
-        src.onError = { [weak self] msg in
+        src.onError = { [weak self, weak src] msg in
             Task { @MainActor in
-                self?.errorMessage = msg
-                self?.stop()
+                // A late error from a previous source must not stop the current one.
+                guard let self, let src, self.source === src else { return }
+                self.errorMessage = msg
+                self.stop()
             }
         }
         src.onInfoChanged = { [weak self, weak src] in
