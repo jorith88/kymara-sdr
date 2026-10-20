@@ -205,8 +205,9 @@ struct ContentView: View {
             StatusBar()
         }
         .background(Theme.window)
-        // Polling for DX spots and the FreeDV station feed stop while nobody can see them.
+        // Polling for DX spots and the FreeDV station feed stop while nobody can see them, the meter slows down.
         .background(WindowVisibilityReader { visible in
+            radio.windowVisible = visible
             cluster.isPaused = !visible
             freedv.isPaused = !visible
         })

@@ -26,6 +26,31 @@ final class InteractiveMTKView: MTKView {
     private var drag: DragMode = .none
     private var scrollAccumulator: CGFloat = 0
     private var trackingArea: NSTrackingArea?
+    private var occlusionObserver: NSObjectProtocol?
+
+    // Don't draw while the window is off screen (minimised, hidden, covered, or full screen in another Space).
+    // The waterfall lines that arrive meanwhile are capped by `SpectrumStore`.
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let occlusionObserver { NotificationCenter.default.removeObserver(occlusionObserver) }
+        occlusionObserver = nil
+        guard let window else { return }
+        occlusionObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updatePaused() }
+        }
+        updatePaused()
+    }
+
+    private func updatePaused() {
+        guard let window else { return }
+        isPaused = !window.occlusionState.contains(.visible)
+    }
+
+    deinit {
+        if let occlusionObserver { NotificationCenter.default.removeObserver(occlusionObserver) }
+    }
 
     override var acceptsFirstResponder: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }

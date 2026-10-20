@@ -41,6 +41,9 @@ final class RadioController {
     @ObservationIgnored private var loading = true
     @ObservationIgnored private var restarting = false
     @ObservationIgnored private var meterTick = 0
+    /// Whether the main window is on screen. While it isn't, the meter updates once a second instead of 30 times:
+    /// SwiftUI re-renders a hidden window's views on every change.
+    @ObservationIgnored var windowVisible = true
     @ObservationIgnored private var needsInitialAutoRange = false
     /// Width of the waterfall in drawable pixels, set by `WaterfallRenderer` (for auto range).
     @ObservationIgnored var waterfallPixelWidth: Double = 1600
@@ -760,8 +763,9 @@ final class RadioController {
 
     private func updateMeter() {
         guard isRunning else { return }
-        let s = engine.status
         meterTick &+= 1
+        guard windowVisible || meterTick % 30 == 0 else { return }
+        let s = engine.status
         var selected = selectedMeter
         let heardSelected = Self.update(&selected, from: s[selectedVFO] ?? ReceiverStatus(), tick: meterTick)
         selectedMeter = selected
