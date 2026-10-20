@@ -6,6 +6,23 @@
         <link>https://github.com/jorith88/kymara-sdr</link>
         <!-- items -->
         <item>
+            <title>Kymara SDR 1.0.0-beta.13</title>
+            <pubDate>Tue, 20 Oct 2026 17:26:16 +0000</pubDate>
+            <sparkle:version>13</sparkle:version>
+            <sparkle:shortVersionString>1.0.0-beta.13</sparkle:shortVersionString>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>Changes</h2>
+<ul>
+<li><strong>Much lower CPU use while the window is off screen.</strong> The spectrum and waterfall stop drawing and the S-meter slows<br>
+to one update a second while the main window is minimised, hidden, covered or full screen in another Space. Before,<br>
+a window in the background kept drawing at full speed and its CPU use grew over a few hours to almost two cores.</li>
+<li><strong>Lighter S-meter.</strong> The meter now redraws only its moving parts and no longer makes the top bar recalculate its<br>
+layout 30 times a second.</li>
+</ul>]]></description>
+            <enclosure url="https://github.com/jorith88/kymara-sdr/releases/download/v1.0.0-beta.13/Kymara-1.0.0-beta.13.dmg" sparkle:edSignature="bN/pGHbMf7dR5uYffUnfq86L7xzJHrEAj4El2FwMVH5SWtaMhw0wZWTDG87/K05Lu30ylujfltA5R3VmCXf0CA==" length="18878569" type="application/octet-stream"/>
+        </item>
+        <item>
             <title>Kymara SDR 1.0.0-beta.12</title>
             <pubDate>Wed, 14 Oct 2026 20:54:07 +0000</pubDate>
             <sparkle:version>12</sparkle:version>
